@@ -4,6 +4,7 @@ import ast
 
 # Load dataset
 df = pd.read_csv("data_mini_books.csv")  # title, authors, genres, image_url
+df = df.sort_values(by = 'average_rating')
 
 # Convert authors/genres from string -> Python list
 df["authors"] = df["authors"].apply(lambda x: ast.literal_eval(x) if isinstance(x, str) else x)
