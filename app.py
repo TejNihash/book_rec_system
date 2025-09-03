@@ -162,12 +162,23 @@ with gr.Blocks() as demo:
     # CSS for compact horizontal bookshelf
     gr.HTML("""
     <style>
-      .book-shelf img { width: 110px; height: 160px; object-fit: cover; border-radius:6px; margin:6px; }
-      .book-shelf .gallery-row { overflow-x: auto !important; overflow-y: hidden !important; white-space: nowrap; }
-      .section-title { margin-top: 14px; margin-bottom: 8px; }
-      .controls { margin-top:6px; margin-bottom:12px; }
+      .book-shelf img { 
+          width: 80px; 
+          height: 120px; 
+          object-fit: cover; 
+          border-radius: 4px; 
+          margin: 4px; 
+      }
+      .book-shelf .gallery-row { 
+          overflow-x: auto !important; 
+          overflow-y: hidden !important; 
+          white-space: nowrap; 
+      }
+      .section-title { margin-top: 12px; margin-bottom: 6px; }
+      .controls { margin-top:4px; margin-bottom:10px; }
     </style>
     """)
+
 
     # Top controls
     with gr.Row():
