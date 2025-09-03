@@ -9,10 +9,19 @@ df = pd.read_csv("data_mini_books.csv")  # title, authors, genres, img_url
 df["authors"] = df["authors"].apply(lambda x: ast.literal_eval(x) if isinstance(x, str) else x)
 df["genres"] = df["genres"].apply(lambda x: ast.literal_eval(x) if isinstance(x, str) else x)
 
-def display_books(genre_filter):
-    # Filter by genre if selected
-    if genre_filter and genre_filter != "All":
-        filtered = df[df["genres"].apply(lambda gs: genre_filter in gs)]
+def search_books(query):
+    query = query.strip().lower()
+    if query:
+        filtered = df[
+            df.apply(
+                lambda row: (
+                    query in row["title"].lower()
+                    or any(query in a.lower() for a in row["authors"])
+                    or any(query in g.lower() for g in row["genres"])
+                ),
+                axis=1,
+            )
+        ]
     else:
         filtered = df
     
@@ -26,26 +35,22 @@ def display_books(genre_filter):
     
     return gallery_data
 
-# Collect unique genres for dropdown
-all_genres = sorted({g for gs in df["genres"] for g in gs})
-
 with gr.Blocks() as demo:
     gr.Markdown("# 📚 My Book Showcase")
     
     with gr.Row():
-        genre_dropdown = gr.Dropdown(
-            ["All"] + all_genres,
-            label="Filter by Genre",
-            value="All"
+        search_box = gr.Textbox(
+            label="Search by title, author, or genre",
+            placeholder="e.g. Aesop, fantasy, Dune..."
         )
     
     gallery = gr.Gallery(
         label="Books", show_label=False, columns=3, height="auto"
     )
     
-    genre_dropdown.change(display_books, inputs=genre_dropdown, outputs=gallery)
+    search_box.change(search_books, inputs=search_box, outputs=gallery)
     
-    # Initial load
-    demo.load(display_books, inputs=genre_dropdown, outputs=gallery)
+    # Initial load (empty query = show all)
+    demo.load(search_books, inputs=search_box, outputs=gallery)
 
 demo.launch()
