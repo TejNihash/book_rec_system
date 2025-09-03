@@ -128,6 +128,23 @@ def like_from_shelf(selected_idx, gallery_indices, liked_books):
     return liked_books, liked_gallery, liked_books, rec_gallery, rec_indices, selected_rec_state
 
 
+def like_and_show_titles(selected_idx, gallery_indices, liked_books):
+    liked_books = list(liked_books or [])
+    gallery_indices = list(gallery_indices or [])
+
+    if selected_idx is not None and selected_idx not in liked_books:
+        liked_books.append(selected_idx)
+    
+    # Compute recommendations (simplified)
+    rec_gallery, rec_indices = get_recommendations_gallery(liked_books, top_n=10)
+    
+    # Extract just titles
+    rec_titles = [df.iloc[idx]["title"] for idx in rec_indices]
+    rec_text = "\n".join(f"{i+1}. {title}" for i, title in enumerate(rec_titles))
+    
+    return liked_books, rec_text
+
+
 # ---------------- UI ----------------
 all_genres = sorted({g for sub in df["genres"] for g in sub})
 
@@ -228,5 +245,18 @@ with gr.Blocks() as demo:
     recommended_like_btn.click(like_from_shelf,
                                inputs=[selected_recommended_state, recommended_indices_state, liked_books_state],
                                outputs=[liked_books_state, liked_gallery, liked_indices_state, recommended_gallery, recommended_indices_state, selected_recommended_state])
+
+# Example Gradio interface
+with gr.Blocks() as demo:
+    liked_state = gr.State([])
+    gallery_indices_state = gr.State(list(range(len(df))))  # mock all indices
+    selected_state = gr.State(None)
+
+    like_btn = gr.Button("❤️ Like Selected")
+    rec_display = gr.Textbox(label="Recommended Titles", lines=10, interactive=False)
+
+    like_btn.click(like_and_show_titles,
+                   inputs=[selected_state, gallery_indices_state, liked_state],
+                   outputs=[liked_state, rec_display])
 
 demo.launch()
