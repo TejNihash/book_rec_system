@@ -105,10 +105,14 @@ def load_more_popular(page, current_indices):
     return gallery, updated_indices, page + 1, gr.update(visible=has_next)
 
 # ---------------- SELECTION ----------------
-def set_selected(evt):
+# selection: map gallery click -> dataframe index
+def set_selected(evt, gallery_indices):
     if evt is None or evt.index is None:
         return None
-    return int(evt.index)  # now returns valid df index
+    if gallery_indices is None or len(gallery_indices) <= evt.index:
+        return None
+    return int(gallery_indices[evt.index])  # now returns df index
+
 
 # ---------------- LIKE / RECOMMEND ----------------
 def like_from_shelf(selected_idx, gallery_indices, liked_books):
@@ -225,9 +229,10 @@ with gr.Blocks() as demo:
     load_more_popular_btn.click(load_more_popular, inputs=[popular_page_state, popular_indices_state],
                                 outputs=[popular_gallery, popular_indices_state, popular_page_state, load_more_popular_btn])
 
-    random_gallery.select(set_selected, inputs=[], outputs=[selected_random_state])
-    popular_gallery.select(set_selected, inputs=[], outputs=[selected_popular_state])
-    recommended_gallery.select(set_selected, inputs=[], outputs=[selected_recommended_state])
+    random_gallery.select(set_selected, inputs=[random_indices_state], outputs=[selected_random_state])
+    popular_gallery.select(set_selected, inputs=[popular_indices_state], outputs=[selected_popular_state])
+    recommended_gallery.select(set_selected, inputs=[recommended_indices_state], outputs=[selected_recommended_state])
+
 
     random_like_btn.click(
         like_from_shelf,
