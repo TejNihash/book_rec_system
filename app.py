@@ -3,7 +3,7 @@ import pandas as pd
 import ast
 
 # Load dataset
-df = pd.read_csv("data_mini_books.csv")  # title, authors, genres, image_url
+df = pd.read_csv("data_mini_books.csv")[1:500]  # title, authors, genres, image_url
 
 # Convert authors/genres from string -> Python list
 df["authors"] = df["authors"].apply(lambda x: ast.literal_eval(x) if isinstance(x, str) else x)
