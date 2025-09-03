@@ -190,7 +190,7 @@ with gr.Blocks() as demo:
 
     # Random shelf
     gr.Markdown("<div class='section-title'>### 🎲 Random Books</div>", elem_id="random_title")
-    random_gallery = gr.Gallery(label="", rows=1, columns=None, elem_classes="book-shelf", show_label=False)
+    random_gallery = gr.Gallery(label="", rows=1, columns=5, elem_classes="book-shelf", show_label=False)
 
     # Controls for random shelf
     with gr.Row():
@@ -199,14 +199,14 @@ with gr.Blocks() as demo:
 
     # Popular shelf
     gr.Markdown("<div class='section-title'>### ⭐ Popular Books</div>", elem_id="popular_title")
-    popular_gallery = gr.Gallery(label="", rows=1, columns=None, elem_classes="book-shelf", show_label=False)
+    popular_gallery = gr.Gallery(label="", rows=1, columns=5, elem_classes="book-shelf", show_label=False)
     with gr.Row():
         load_more_popular_btn = gr.Button("Load More Popular")
         popular_like_btn = gr.Button("❤️ Like Selected (Popular)")
 
     # Recommended shelf
     gr.Markdown("<div class='section-title'>### 💡 Recommended Books</div>", elem_id="rec_title")
-    recommended_gallery = gr.Gallery(label="", rows=1, columns=None, elem_classes="book-shelf", show_label=False)
+    recommended_gallery = gr.Gallery(label="", rows=1, columns=5, elem_classes="book-shelf", show_label=False)
     with gr.Row():
         recommended_like_btn = gr.Button("❤️ Like Selected (Recommended)")
 
