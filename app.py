@@ -106,10 +106,10 @@ def load_more_popular(page, current_indices):
     has_next = end < len(sorted_df)
     return gallery, updated_indices, page + 1, gr.update(visible=has_next)
 
-def set_selected(evt, gallery_indices):
-    if evt is None or gallery_indices is None:
+def set_selected(evt):
+    if evt is None or evt.index is None:
         return None
-    return gallery_indices[int(evt.index)]
+    return int(evt.index)  # This will now be a valid index into df
 
 # ---------------- LIKE / RECOMMEND ----------------
 def like_from_shelf(selected_idx, gallery_indices, liked_books):
@@ -229,26 +229,26 @@ with gr.Blocks() as demo:
     load_more_popular_btn.click(load_more_popular, inputs=[popular_page_state, popular_indices_state],
                                 outputs=[popular_gallery, popular_indices_state, popular_page_state, load_more_popular_btn])
 
-    random_gallery.select(set_selected, inputs=[random_indices_state], outputs=[selected_random_state])
-    popular_gallery.select(set_selected, inputs=[popular_indices_state], outputs=[selected_popular_state])
-    recommended_gallery.select(set_selected, inputs=[recommended_indices_state], outputs=[selected_recommended_state])
+    random_gallery.select(set_selected, inputs=[], outputs=[selected_random_state])
+    popular_gallery.select(set_selected, inputs=[], outputs=[selected_popular_state])
+    recommended_gallery.select(set_selected, inputs=[], outputs=[selected_recommended_state])
 
     random_like_btn.click(
         like_from_shelf,
         inputs=[selected_random_state, random_indices_state, liked_books_state],
-        outputs=[liked_books_state, liked_gallery, liked_indices_state, recommended_gallery, recommended_indices_state]
+        outputs=[liked_books_state, liked_gallery, liked_indices_state, recommended_gallery, recommended_indices_state,selected_random_state]
     )
 
     popular_like_btn.click(
         like_from_shelf,
         inputs=[selected_popular_state, popular_indices_state, liked_books_state],
-        outputs=[liked_books_state, liked_gallery, liked_indices_state, recommended_gallery, recommended_indices_state]
+        outputs=[liked_books_state, liked_gallery, liked_indices_state, recommended_gallery, recommended_indices_state,selected_popular_state]
     )
 
     recommended_like_btn.click(
         like_from_shelf,
         inputs=[selected_recommended_state, recommended_indices_state, liked_books_state],
-        outputs=[liked_books_state, liked_gallery, liked_indices_state, recommended_gallery, recommended_indices_state]
+        outputs=[liked_books_state, liked_gallery, liked_indices_state, recommended_gallery, recommended_indices_state,selected_recommended_state]
     )
 
 demo.launch()
