@@ -4,12 +4,14 @@ import numpy as np
 import ast
 import random
 import logging
+import re
 
 from sklearn.preprocessing import MultiLabelBinarizer, normalize
 from scipy.sparse import csr_matrix, hstack
 from sklearn.metrics.pairwise import cosine_similarity
 
 logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # ---------------- CONFIG ----------------
 DATA_CSV = "data_mini_books.csv"
@@ -40,8 +42,7 @@ combined_matrix = normalize(combined_matrix)
 # ---------------- HELPERS ----------------
 def make_gallery_data_from_indices(indices):
     out = []
-    for idx in indices:
-        # defend against bad indices
+    for idx in indices or []:
         try:
             row = df.iloc[int(idx)]
         except Exception:
@@ -67,8 +68,8 @@ def filter_books(query="", genre_filter=""):
 def get_recommendations_gallery(liked_indices, top_n=20):
     if not liked_indices:
         return [], []
-    liked_indices = list(map(int, liked_indices))
-    # Defensive: clamp indices to valid range
+    # defensive convert to ints & ensure valid
+    liked_indices = [int(i) for i in liked_indices]
     valid = [i for i in liked_indices if 0 <= i < combined_matrix.shape[0]]
     if not valid:
         return [], []
@@ -81,7 +82,6 @@ def get_recommendations_gallery(liked_indices, top_n=20):
     ratings = df["average_rating"].fillna(0).values
     final_scores = ALPHA * ratings + (1 - ALPHA) * sims
     ranked_idx = np.argsort(final_scores)[::-1]
-    # exclude liked books from recommendations
     recommended = [int(i) for i in ranked_idx if int(i) not in set(valid)][:top_n]
     gallery = make_gallery_data_from_indices(recommended)
     return gallery, recommended
@@ -116,85 +116,155 @@ def load_more_popular(page, current_indices):
     has_next = end < len(sorted_df)
     return gallery, updated_indices, page + 1, gr.update(visible=has_next)
 
-# ---------------- SELECTION ----------------
-def set_selected(evt, gallery_indices):
-    if evt is None or gallery_indices is None:
-        return None
+# ---------------- SELECTION (robust) ----------------
+def set_selected(evt):
+    """
+    Robust mapping:
+      - Prefer evt.value (gallery item): image_url + caption tuple
+      - Try to find df row by matching image_url
+      - Next try matching title extracted from caption
+      - Fallback to evt.index (gallery position) -> return position (not df index)
+    Returns: int df-index or None
+    """
     try:
-        pos = int(evt.index)       # position in gallery
-    except Exception:
-        return None
-    if pos < 0 or pos >= len(gallery_indices):
-        return None
-    return int(gallery_indices[pos])  # actual df index
+        if evt is None:
+            logger.info("set_selected: evt is None")
+            return None
+
+        logger.info(f"set_selected: evt has attributes: index={getattr(evt,'index',None)} value_exists={'value' in dir(evt) or hasattr(evt,'value')}")
+
+        val = getattr(evt, "value", None)
+
+        # If value present, try matching image_url first
+        if val:
+            # val often is (image_url, caption)
+            if isinstance(val, (list, tuple)) and len(val) >= 1:
+                img = val[0]
+                caption = val[1] if len(val) > 1 else None
+            elif isinstance(val, dict):
+                # possible dict form
+                img = val.get("image") or val.get("src") or val.get("image_url") or val.get("url")
+                caption = val.get("caption") or val.get("title") or None
+            else:
+                # val might be primitive (string url)
+                img = val
+                caption = None
+
+            if img:
+                matches = df.index[df["image_url"] == img].tolist()
+                if matches:
+                    df_idx = int(matches[0])
+                    logger.info(f"set_selected: matched by image_url -> df_idx={df_idx}")
+                    return df_idx
+
+            if caption:
+                # caption format is "**Title**\nby ..."
+                m = re.search(r"\*\*(.*?)\*\*", caption)
+                if m:
+                    title = m.group(1).strip()
+                    matches = df.index[df["title"] == title].tolist()
+                    if matches:
+                        df_idx = int(matches[0])
+                        logger.info(f"set_selected: matched by caption/title -> df_idx={df_idx}")
+                        return df_idx
+                # fallback: try direct title equality (case-insensitive)
+                try_title = caption.strip()
+                matches = df.index[df["title_lower"] == try_title.lower()].tolist()
+                if matches:
+                    df_idx = int(matches[0])
+                    logger.info(f"set_selected: matched by caption direct -> df_idx={df_idx}")
+                    return df_idx
+
+        # fallback: use evt.index (gallery position) — return None (we don't map here without gallery indices)
+        pos = getattr(evt, "index", None)
+        if pos is not None:
+            try:
+                pos_i = int(pos)
+                logger.info(f"set_selected: falling back to pos {pos_i} (no df mapping available here)")
+                # We return the position — like_from_shelf will attempt to interpret it
+                return pos_i
+            except Exception:
+                pass
+
+    except Exception as e:
+        logger.exception("set_selected: exception while mapping selection")
+
+    logger.info("set_selected: could not map selection -> returning None")
+    return None
 
 # ---------------- LIKE / RECOMMEND (robust) ----------------
 def like_from_shelf(selected_idx, gallery_indices, liked_books, current_rec_indices):
     """
     Inputs:
-      - selected_idx: value returned by set_selected (expected to be df index), but be defensive.
-      - gallery_indices: the list of df indices currently shown in that gallery
+      - selected_idx: value returned by set_selected (might be df-index OR gallery position OR None)
+      - gallery_indices: the list of df indices currently shown in that gallery (best effort)
       - liked_books: current list of liked df-indices
       - current_rec_indices: current recommended indices list (so we can keep them if nothing changes)
     Returns:
-      liked_books_state, liked_gallery, liked_indices_state, recommended_gallery, recommended_indices_state, reset_selected_state
+      liked_books_state, liked_gallery (data for gallery), liked_indices_state,
+      recommended_gallery (data), recommended_indices_state, reset_selected_state
     """
     liked_books = list(liked_books or [])
     gallery_indices = list(gallery_indices or [])
     current_rec_indices = list(current_rec_indices or [])
 
-    logging.info(f"like_from_shelf called — selected_idx={selected_idx}, gallery_indices(len)={len(gallery_indices)}, liked_books={liked_books}")
+    logger.info(f"like_from_shelf called — selected_idx={selected_idx}, gallery_indices(len)={len(gallery_indices)}, liked_books={liked_books}")
 
-    # Determine actual df index from selected_idx. It may already be a df-index,
-    # or might be a gallery position (rare if set_selected is correct), so try both.
-    df_idx = None
+    # No selection -> keep existing recs and liked gallery unchanged
     if selected_idx is None:
-        # nothing selected: keep existing recs (do NOT clear them)
-        logging.info("No selection — keeping existing recommendations.")
+        logger.info("like_from_shelf: No selection -> keeping existing recs and liked gallery")
         liked_gallery = make_gallery_data_from_indices(liked_books)
         rec_gallery = make_gallery_data_from_indices(current_rec_indices)
         return liked_books, liked_gallery, liked_books, rec_gallery, current_rec_indices, None
 
-    # If selected_idx is directly one of the gallery_indices, treat as df index
+    # Determine df_idx:
+    df_idx = None
     try:
-        if selected_idx in gallery_indices:
-            df_idx = int(selected_idx)
-        else:
-            # maybe selected_idx is a position number referencing gallery_indices
-            sel_int = int(selected_idx)
-            if 0 <= sel_int < len(gallery_indices):
-                df_idx = int(gallery_indices[sel_int])
+        # If selected_idx is already a df index present in df -> use it
+        if int(selected_idx) in df.index:
+            # but careful: selected_idx may be a gallery-position mapped to small integer that's also a valid df index.
+            # Prefer mapping via gallery_indices when available:
+            if selected_idx in gallery_indices:
+                df_idx = int(selected_idx)
             else:
-                # fallback: treat as df index if valid range
-                if 0 <= sel_int < combined_matrix.shape[0]:
-                    df_idx = sel_int
+                # if gallery_indices provided and selected_idx is a position, map to corresponding df index
+                if 0 <= int(selected_idx) < len(gallery_indices):
+                    df_idx = int(gallery_indices[int(selected_idx)])
+                else:
+                    # as fallback, if selected_idx points to a valid df row (rare), accept it
+                    if 0 <= int(selected_idx) < combined_matrix.shape[0]:
+                        df_idx = int(selected_idx)
     except Exception:
         df_idx = None
 
+    # Another attempt: if selected_idx not in df but gallery_indices available and selected_idx is a position
     if df_idx is None:
-        # couldn't interpret selection — keep existing recs and don't change liked books
-        logging.warning("Couldn't interpret selected index; keeping recommendations unchanged.")
+        try:
+            pos = int(selected_idx)
+            if 0 <= pos < len(gallery_indices):
+                df_idx = int(gallery_indices[pos])
+        except Exception:
+            df_idx = None
+
+    if df_idx is None:
+        logger.warning("like_from_shelf: couldn't interpret selected index; keeping recs as-is")
         liked_gallery = make_gallery_data_from_indices(liked_books)
         rec_gallery = make_gallery_data_from_indices(current_rec_indices)
         return liked_books, liked_gallery, liked_books, rec_gallery, current_rec_indices, None
 
-    # Add to liked books if not already present
+    # Add to liked list if new
     if df_idx not in liked_books:
         liked_books.append(df_idx)
-        logging.info(f"Added df_idx {df_idx} to liked_books -> {liked_books}")
+        logger.info(f"like_from_shelf: added df_idx {df_idx} to liked_books -> {liked_books}")
     else:
-        logging.info(f"df_idx {df_idx} already in liked_books")
+        logger.info(f"like_from_shelf: df_idx {df_idx} already liked")
 
     liked_gallery = make_gallery_data_from_indices(liked_books)
 
-    # Compute recommendations from liked_books (defensive)
-    if liked_books:
-        rec_gallery, rec_indices = get_recommendations_gallery(liked_books, top_n=20)
-    else:
-        rec_gallery = make_gallery_data_from_indices(current_rec_indices)
-        rec_indices = current_rec_indices
+    # compute recommendations using liked_books
+    rec_gallery, rec_indices = get_recommendations_gallery(liked_books, top_n=20) if liked_books else (make_gallery_data_from_indices(current_rec_indices), current_rec_indices)
 
-    # Return: reset the selection for the gallery that triggered the like (None)
+    # Reset selection for the gallery that triggered the like (return None for that selected_state)
     return liked_books, liked_gallery, liked_books, rec_gallery, rec_indices, None
 
 # ---------------- INITIAL RECOMMENDATIONS ----------------
@@ -286,26 +356,12 @@ with gr.Blocks() as demo:
     load_more_popular_btn.click(load_more_popular, inputs=[popular_page_state, popular_indices_state],
                                 outputs=[popular_gallery, popular_indices_state, popular_page_state, load_more_popular_btn])
 
-    # IMPORTANT: pass gallery indices state so we can map position -> df index
-    random_gallery.select(
-        set_selected,
-        inputs=[random_indices_state],
-        outputs=[selected_random_state]
-    )
-    popular_gallery.select(
-        set_selected,
-        inputs=[popular_indices_state],
-        outputs=[selected_popular_state]
-    )
-    recommended_gallery.select(
-        set_selected,
-        inputs=[recommended_indices_state],
-        outputs=[selected_recommended_state]
-    )
+    # IMPORTANT: set_selected expects only the event object. It will use evt.value (image+caption) to map to df index.
+    random_gallery.select(set_selected, outputs=[selected_random_state])
+    popular_gallery.select(set_selected, outputs=[selected_popular_state])
+    recommended_gallery.select(set_selected, outputs=[selected_recommended_state])
 
-
-
-    # Like buttons: pass current recommended indices so handler can preserve recs if needed
+    # Like buttons: pass gallery_indices and current_rec_indices so handler can map pos->df and preserve recs
     random_like_btn.click(
         like_from_shelf,
         inputs=[selected_random_state, random_indices_state, liked_books_state, recommended_indices_state],
@@ -324,4 +380,5 @@ with gr.Blocks() as demo:
         outputs=[liked_books_state, liked_gallery, liked_indices_state, recommended_gallery, recommended_indices_state, selected_recommended_state]
     )
 
-demo.launch(ssr_mode = False)
+# disable SSR to avoid inconsistent event signatures in some environments
+demo.launch(ssr_mode=False)
