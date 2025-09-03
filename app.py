@@ -117,24 +117,16 @@ def load_more_popular(page, current_indices):
     return gallery, updated_indices, page + 1, gr.update(visible=has_next)
 
 # ---------------- SELECTION ----------------
-def set_selected(evt, gallery_indices=None):
-    """
-    Handle gallery selection.
-    evt.index = position of clicked item in gallery
-    gallery_indices = list of df indices stored in state (optional)
-    """
-    if evt is None:
+def set_selected(evt, gallery_indices):
+    if evt is None or gallery_indices is None:
         return None
     try:
-        pos = int(evt.index)
+        pos = int(evt.index)       # position in gallery
     except Exception:
         return None
-    if gallery_indices is None:
-        return pos  # fallback: just return the position
     if pos < 0 or pos >= len(gallery_indices):
         return None
-    return int(gallery_indices[pos])
-
+    return int(gallery_indices[pos])  # actual df index
 
 # ---------------- LIKE / RECOMMEND (robust) ----------------
 def like_from_shelf(selected_idx, gallery_indices, liked_books, current_rec_indices):
@@ -296,17 +288,21 @@ with gr.Blocks() as demo:
 
     # IMPORTANT: pass gallery indices state so we can map position -> df index
     random_gallery.select(
-    lambda evt, gi=random_indices_state.value: set_selected(evt, gi),
-    outputs=[selected_random_state]
+        set_selected,
+        inputs=[random_indices_state],
+        outputs=[selected_random_state]
     )
     popular_gallery.select(
-        lambda evt, gi=popular_indices_state.value: set_selected(evt, gi),
+        set_selected,
+        inputs=[popular_indices_state],
         outputs=[selected_popular_state]
     )
     recommended_gallery.select(
-        lambda evt, gi=recommended_indices_state.value: set_selected(evt, gi),
+        set_selected,
+        inputs=[recommended_indices_state],
         outputs=[selected_recommended_state]
     )
+
 
 
     # Like buttons: pass current recommended indices so handler can preserve recs if needed
