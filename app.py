@@ -74,7 +74,7 @@ def get_recommendations_gallery(liked_indices, top_n=20):
     final_scores = ALPHA * ratings + (1 - ALPHA) * sims
     ranked_idx = np.argsort(final_scores)[::-1]
     recommended = [int(i) for i in ranked_idx if i not in liked_indices][:top_n]
-    gallery = make_gallery_data_from_indices(recommended)
+    gallery = make_gallery_data_from_indices(recommended) if recommended else []
     return gallery, recommended
 
 def make_gallery_with_mapping(indices):
@@ -123,7 +123,7 @@ def like_from_shelf(selected_idx, liked_books):
     liked_books = list(liked_books or [])
     if selected_idx is not None and selected_idx not in liked_books:
         liked_books.append(selected_idx)
-    liked_gallery = make_gallery_data_from_indices(liked_books)
+    liked_gallery = make_gallery_data_from_indices(liked_books) if liked_books else []
     rec_gallery, rec_indices = get_recommendations_gallery(liked_books)
     return liked_books, liked_gallery, liked_books, rec_gallery, rec_indices
 
@@ -151,32 +151,29 @@ with gr.Blocks() as demo:
     popular_mapping_state = gr.State({})
     selected_popular_state = gr.State(None)
     popular_page_state = gr.State(0)
+    recommended_indices_state = gr.State([])
     recommended_mapping_state = gr.State({})
     selected_recommended_state = gr.State(None)
-    recommended_indices_state = gr.State([])
     liked_books_state = gr.State([])
-    empty_liked_state = gr.State([])  # For default recommendations
+    empty_liked_state = gr.State([])
 
-    # ---------------- Random ----------------
+    # ---------------- Galleries ----------------
     gr.Markdown("<div class='section-title'>🎲 Random Books</div>")
     random_gallery = gr.Gallery(rows=1, columns=None, elem_classes="book-shelf", show_label=False, preview=True)
     with gr.Row():
         random_like_btn = gr.Button("❤️ Like Selected (Random)")
         shuffle_random_btn = gr.Button("🔀 Shuffle Random")
 
-    # ---------------- Popular ----------------
     gr.Markdown("<div class='section-title'>⭐ Popular Books</div>")
     popular_gallery = gr.Gallery(rows=1, columns=None, elem_classes="book-shelf", show_label=False, preview=True)
     with gr.Row():
         load_more_popular_btn = gr.Button("Load More Popular")
         popular_like_btn = gr.Button("❤️ Like Selected (Popular)")
 
-    # ---------------- Recommended ----------------
     gr.Markdown("<div class='section-title'>💡 Recommended Books</div>")
     recommended_gallery = gr.Gallery(rows=1, columns=None, elem_classes="book-shelf", show_label=False, preview=True)
     recommended_like_btn = gr.Button("❤️ Like Selected (Recommended)")
 
-    # ---------------- Liked ----------------
     gr.Markdown("<div class='section-title'>❤️ Liked Books</div>")
     liked_gallery = gr.Gallery(rows=1, columns=None, elem_classes="book-shelf", show_label=False, preview=True)
 
