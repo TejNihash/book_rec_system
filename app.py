@@ -117,80 +117,51 @@ def load_more_popular(page, current_indices):
     return gallery, updated_indices, page + 1, gr.update(visible=has_next)
 
 # ---------------- SELECTION (robust) ----------------
-def set_selected(evt):
+# --- selection handler (accepts value directly, not evt) ---
+def set_selected(val):
     """
-    Robust mapping:
-      - Prefer evt.value (gallery item): image_url + caption tuple
-      - Try to find df row by matching image_url
-      - Next try matching title extracted from caption
-      - Fallback to evt.index (gallery position) -> return position (not df index)
-    Returns: int df-index or None
+    val is the gallery item (tuple: (image_url, caption)) or just image_url.
+    Returns the df index or None.
     """
-    try:
-        if evt is None:
-            logger.info("set_selected: evt is None")
-            return None
+    if val is None:
+        logger.info("set_selected: val is None")
+        return None
 
-        logger.info(f"set_selected: evt has attributes: index={getattr(evt,'index',None)} value_exists={'value' in dir(evt) or hasattr(evt,'value')}")
+    logger.info(f"set_selected: got value={val}")
 
-        val = getattr(evt, "value", None)
+    img, caption = None, None
+    if isinstance(val, (list, tuple)) and len(val) >= 1:
+        img = val[0]
+        caption = val[1] if len(val) > 1 else None
+    elif isinstance(val, str):
+        img = val
+    elif isinstance(val, dict):
+        img = val.get("image") or val.get("src") or val.get("image_url")
+        caption = val.get("caption")
 
-        # If value present, try matching image_url first
-        if val:
-            # val often is (image_url, caption)
-            if isinstance(val, (list, tuple)) and len(val) >= 1:
-                img = val[0]
-                caption = val[1] if len(val) > 1 else None
-            elif isinstance(val, dict):
-                # possible dict form
-                img = val.get("image") or val.get("src") or val.get("image_url") or val.get("url")
-                caption = val.get("caption") or val.get("title") or None
-            else:
-                # val might be primitive (string url)
-                img = val
-                caption = None
+    # try to map by image_url
+    if img:
+        matches = df.index[df["image_url"] == img].tolist()
+        if matches:
+            df_idx = int(matches[0])
+            logger.info(f"set_selected: matched image_url -> df_idx={df_idx}")
+            return df_idx
 
-            if img:
-                matches = df.index[df["image_url"] == img].tolist()
-                if matches:
-                    df_idx = int(matches[0])
-                    logger.info(f"set_selected: matched by image_url -> df_idx={df_idx}")
-                    return df_idx
+    # fallback: try to parse title from caption
+    if caption:
+        import re
+        m = re.search(r"\*\*(.*?)\*\*", caption)
+        if m:
+            title = m.group(1).strip()
+            matches = df.index[df["title"] == title].tolist()
+            if matches:
+                df_idx = int(matches[0])
+                logger.info(f"set_selected: matched caption title -> df_idx={df_idx}")
+                return df_idx
 
-            if caption:
-                # caption format is "**Title**\nby ..."
-                m = re.search(r"\*\*(.*?)\*\*", caption)
-                if m:
-                    title = m.group(1).strip()
-                    matches = df.index[df["title"] == title].tolist()
-                    if matches:
-                        df_idx = int(matches[0])
-                        logger.info(f"set_selected: matched by caption/title -> df_idx={df_idx}")
-                        return df_idx
-                # fallback: try direct title equality (case-insensitive)
-                try_title = caption.strip()
-                matches = df.index[df["title_lower"] == try_title.lower()].tolist()
-                if matches:
-                    df_idx = int(matches[0])
-                    logger.info(f"set_selected: matched by caption direct -> df_idx={df_idx}")
-                    return df_idx
-
-        # fallback: use evt.index (gallery position) — return None (we don't map here without gallery indices)
-        pos = getattr(evt, "index", None)
-        if pos is not None:
-            try:
-                pos_i = int(pos)
-                logger.info(f"set_selected: falling back to pos {pos_i} (no df mapping available here)")
-                # We return the position — like_from_shelf will attempt to interpret it
-                return pos_i
-            except Exception:
-                pass
-
-    except Exception as e:
-        logger.exception("set_selected: exception while mapping selection")
-
-    logger.info("set_selected: could not map selection -> returning None")
+    logger.warning("set_selected: could not map selection")
     return None
+
 
 # ---------------- LIKE / RECOMMEND (robust) ----------------
 def like_from_shelf(selected_idx, gallery_indices, liked_books, current_rec_indices):
