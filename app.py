@@ -236,19 +236,19 @@ with gr.Blocks() as demo:
     random_like_btn.click(
         like_from_shelf,
         inputs=[selected_random_state, random_indices_state, liked_books_state],
-        outputs=[liked_books_state, liked_gallery, liked_indices_state, recommended_gallery, recommended_indices_state, selected_random_state]
+        outputs=[liked_books_state, liked_gallery, liked_indices_state, recommended_gallery, recommended_indices_state]
     )
 
     popular_like_btn.click(
         like_from_shelf,
         inputs=[selected_popular_state, popular_indices_state, liked_books_state],
-        outputs=[liked_books_state, liked_gallery, liked_indices_state, recommended_gallery, recommended_indices_state, selected_popular_state]
+        outputs=[liked_books_state, liked_gallery, liked_indices_state, recommended_gallery, recommended_indices_state]
     )
 
     recommended_like_btn.click(
         like_from_shelf,
         inputs=[selected_recommended_state, recommended_indices_state, liked_books_state],
-        outputs=[liked_books_state, liked_gallery, liked_indices_state, recommended_gallery, recommended_indices_state, selected_recommended_state]
+        outputs=[liked_books_state, liked_gallery, liked_indices_state, recommended_gallery, recommended_indices_state]
     )
 
 demo.launch()
