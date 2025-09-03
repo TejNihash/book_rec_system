@@ -3,13 +3,11 @@ import pandas as pd
 import numpy as np
 import ast
 import random
-import logging
-
 from sklearn.preprocessing import MultiLabelBinarizer, normalize
 from scipy.sparse import csr_matrix, hstack
 from sklearn.metrics.pairwise import cosine_similarity
+import logging
 
-# ---------------- LOGGING ----------------
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -34,7 +32,6 @@ mlb_genres = MultiLabelBinarizer()
 genre_matrix = mlb_genres.fit_transform(df["genres"])
 mlb_authors = MultiLabelBinarizer()
 author_matrix = mlb_authors.fit_transform(df["authors"])
-
 desc_sparse = csr_matrix(desc_embeds)
 combined_matrix = hstack([desc_sparse, csr_matrix(genre_matrix), csr_matrix(author_matrix)])
 combined_matrix = normalize(combined_matrix)
@@ -61,14 +58,13 @@ def filter_books(query="", genre_filter=""):
         filtered = filtered[filtered["genres_lower"].apply(lambda lst: g in lst)]
     return filtered.head(MAX_BOOKS)
 
-# ---------------- RECOMMENDER ----------------
 def get_recommendations_gallery(liked_indices, top_n=20):
     if not liked_indices:
-        # fallback: top rated books
-        top_df = df.sort_values("average_rating", ascending=False).head(top_n)
-        indices = list(top_df.index)
-        return make_gallery_data_from_indices(indices), indices
-
+        # default top-rated recommendations
+        top_indices = df.sort_values("average_rating", ascending=False).head(top_n).index.tolist()
+        gallery = make_gallery_data_from_indices(top_indices)
+        return gallery, top_indices
+    liked_indices = list(liked_indices)
     avg_embed = combined_matrix[liked_indices].mean(axis=0)
     if hasattr(avg_embed, "A"):
         avg_vec = np.asarray(avg_embed.A1)
@@ -82,25 +78,38 @@ def get_recommendations_gallery(liked_indices, top_n=20):
     gallery = make_gallery_data_from_indices(recommended)
     return gallery, recommended
 
+# ---------------- GALLERY + MAPPING ----------------
+def make_gallery_with_mapping(indices):
+    gallery = make_gallery_data_from_indices(indices)
+    pos_to_idx = {i: idx for i, idx in enumerate(indices)}
+    return gallery, pos_to_idx
+
+def gallery_select(pos, pos_to_idx):
+    if pos is None:
+        return None
+    return pos_to_idx.get(pos)
+
 # ---------------- SHELF FUNCTIONS ----------------
 def random_gallery_init():
     indices = random.sample(list(df.index), min(PAGE_SIZE, len(df)))
-    return make_gallery_data_from_indices(indices), indices
+    gallery, mapping = make_gallery_with_mapping(indices)
+    return gallery, mapping, None
 
 def search_random(query, genre_filter):
     filtered = filter_books(query, genre_filter)
     indices = list(filtered.index)
     if not indices:
-        return [], []
+        return [], {}, None
     sampled = random.sample(indices, min(PAGE_SIZE, len(indices)))
-    return make_gallery_data_from_indices(sampled), sampled
+    gallery, mapping = make_gallery_with_mapping(sampled)
+    return gallery, mapping, None
 
 def init_popular():
     sorted_df = df.sort_values("ratings_count", ascending=False).head(MAX_BOOKS)
     indices = list(sorted_df.iloc[:PAGE_SIZE].index)
-    gallery = make_gallery_data_from_indices(indices)
+    gallery, mapping = make_gallery_with_mapping(indices)
     has_next = PAGE_SIZE < len(sorted_df)
-    return gallery, indices, 1, gr.update(visible=has_next)
+    return gallery, mapping, 1, gr.update(visible=has_next)
 
 def load_more_popular(page, current_indices):
     sorted_df = df.sort_values("ratings_count", ascending=False).head(MAX_BOOKS)
@@ -108,41 +117,18 @@ def load_more_popular(page, current_indices):
     end = start + PAGE_SIZE
     new_indices = list(sorted_df.iloc[start:end].index)
     updated_indices = list(current_indices or []) + new_indices
-    gallery = make_gallery_data_from_indices(updated_indices)
+    gallery, mapping = make_gallery_with_mapping(updated_indices)
     has_next = end < len(sorted_df)
-    return gallery, updated_indices, page + 1, gr.update(visible=has_next)
-
-# ---------------- SELECTION HANDLER ----------------
-def set_selected(gallery_item):
-    """
-    Receives a selected gallery item (image_url, caption tuple) and maps to df index.
-    """
-    if gallery_item is None:
-        logger.info("set_selected: no item selected")
-        return None
-    img_url = gallery_item[0]
-    match = df.index[df["image_url"] == img_url]
-    if not match.empty:
-        idx = int(match[0])
-        logger.info(f"set_selected: mapped image_url to df index {idx}")
-        return idx
-    logger.warning("set_selected: could not map image_url")
-    return None
-
+    return gallery, mapping, page + 1, gr.update(visible=has_next)
 
 # ---------------- LIKE HANDLER ----------------
-def like_from_shelf(selected_idx, gallery_indices, liked_books):
-    if selected_idx is None:
-        return liked_books, make_gallery_data_from_indices(liked_books), liked_books, *get_recommendations_gallery(liked_books), None
-
-    df_idx = selected_idx
+def like_from_shelf(selected_idx, liked_books):
     liked_books = list(liked_books or [])
-    if df_idx not in liked_books:
-        liked_books.append(df_idx)
-
+    if selected_idx is not None and selected_idx not in liked_books:
+        liked_books.append(selected_idx)
     liked_gallery = make_gallery_data_from_indices(liked_books)
     rec_gallery, rec_indices = get_recommendations_gallery(liked_books)
-    return liked_books, liked_gallery, liked_books, rec_gallery, rec_indices, None
+    return liked_books, liked_gallery, liked_books, rec_gallery, rec_indices
 
 # ---------------- UI ----------------
 all_genres = sorted({g for sub in df["genres"] for g in sub})
@@ -152,7 +138,9 @@ with gr.Blocks() as demo:
     <style>
       .book-shelf { display: flex !important; overflow-x: auto !important; overflow-y: hidden !important; white-space: nowrap !important; height: 140px; }
       .book-shelf img { width: 80px; height: 120px; object-fit: cover; border-radius: 4px; margin: 4px; }
-      .book-shelf .gallery-selected img { border: 3px solid orange; }
+      .book-shelf .gallery-selected img { width: 150px !important; height: auto !important; max-height: 200px !important; object-fit: contain; margin: 4px auto; display: block; }
+      .section-title { margin-top: 12px; margin-bottom: 6px; }
+      .controls { margin-top:4px; margin-bottom:10px; }
     </style>
     """)
 
@@ -161,70 +149,66 @@ with gr.Blocks() as demo:
         genre_dropdown = gr.Dropdown(label="Filter by genre", choices=all_genres, value=None, multiselect=False)
 
     # States
-    random_indices_state = gr.State([])
-    popular_indices_state = gr.State([])
+    random_mapping_state = gr.State({})
+    selected_random_state = gr.State(None)
+    popular_mapping_state = gr.State({})
+    selected_popular_state = gr.State(None)
     popular_page_state = gr.State(0)
+    recommended_mapping_state = gr.State({})
+    selected_recommended_state = gr.State(None)
     recommended_indices_state = gr.State([])
     liked_books_state = gr.State([])
-    liked_indices_state = gr.State([])
-
-    selected_random_state = gr.State(None)
-    selected_popular_state = gr.State(None)
-    selected_recommended_state = gr.State(None)
 
     # ---------------- Random ----------------
-    gr.Markdown("🎲 Random Books")
+    gr.Markdown("<div class='section-title'>🎲 Random Books</div>")
     random_gallery = gr.Gallery(rows=1, columns=None, elem_classes="book-shelf", show_label=False, preview=True)
     with gr.Row():
         random_like_btn = gr.Button("❤️ Like Selected (Random)")
         shuffle_random_btn = gr.Button("🔀 Shuffle Random")
 
     # ---------------- Popular ----------------
-    gr.Markdown("⭐ Popular Books")
+    gr.Markdown("<div class='section-title'>⭐ Popular Books</div>")
     popular_gallery = gr.Gallery(rows=1, columns=None, elem_classes="book-shelf", show_label=False, preview=True)
     with gr.Row():
         load_more_popular_btn = gr.Button("Load More Popular")
         popular_like_btn = gr.Button("❤️ Like Selected (Popular)")
 
     # ---------------- Recommended ----------------
-    gr.Markdown("💡 Recommended Books")
+    gr.Markdown("<div class='section-title'>💡 Recommended Books</div>")
     recommended_gallery = gr.Gallery(rows=1, columns=None, elem_classes="book-shelf", show_label=False, preview=True)
     recommended_like_btn = gr.Button("❤️ Like Selected (Recommended)")
 
     # ---------------- Liked ----------------
-    gr.Markdown("❤️ Liked Books")
+    gr.Markdown("<div class='section-title'>❤️ Liked Books</div>")
     liked_gallery = gr.Gallery(rows=1, columns=None, elem_classes="book-shelf", show_label=False, preview=True)
 
     # ---------------- INITIAL LOADS ----------------
-    demo.load(random_gallery_init, inputs=[], outputs=[random_gallery, random_indices_state])
-    demo.load(init_popular, inputs=[], outputs=[popular_gallery, popular_indices_state, popular_page_state, load_more_popular_btn])
-    demo.load(lambda: get_recommendations_gallery([]), inputs=[], outputs=[recommended_gallery, recommended_indices_state])
-    demo.load(lambda: ([], []), inputs=[], outputs=[liked_gallery, liked_indices_state])
+    demo.load(random_gallery_init, inputs=[], outputs=[random_gallery, random_mapping_state, selected_random_state])
+    demo.load(init_popular, inputs=[], outputs=[popular_gallery, popular_mapping_state, popular_page_state, load_more_popular_btn])
+    demo.load(get_recommendations_gallery, inputs=[[]], outputs=[recommended_gallery, recommended_indices_state])
+    demo.load(lambda: ([],), inputs=[], outputs=[liked_gallery])
 
     # ---------------- INTERACTIONS ----------------
-    search_box.submit(search_random, inputs=[search_box, genre_dropdown], outputs=[random_gallery, random_indices_state])
-    genre_dropdown.change(search_random, inputs=[search_box, genre_dropdown], outputs=[random_gallery, random_indices_state])
-    shuffle_random_btn.click(random_gallery_init, inputs=[], outputs=[random_gallery, random_indices_state])
+    search_box.submit(search_random, inputs=[search_box, genre_dropdown], outputs=[random_gallery, random_mapping_state, selected_random_state])
+    genre_dropdown.change(search_random, inputs=[search_box, genre_dropdown], outputs=[random_gallery, random_mapping_state, selected_random_state])
+    shuffle_random_btn.click(random_gallery_init, inputs=[], outputs=[random_gallery, random_mapping_state, selected_random_state])
+    load_more_popular_btn.click(load_more_popular, inputs=[popular_page_state, popular_mapping_state],
+                                outputs=[popular_gallery, popular_mapping_state, popular_page_state, load_more_popular_btn])
 
-    load_more_popular_btn.click(load_more_popular, inputs=[popular_page_state, popular_indices_state],
-                                outputs=[popular_gallery, popular_indices_state, popular_page_state, load_more_popular_btn])
+    # Selection using position → mapping
+    random_gallery.select(gallery_select, inputs=[random_gallery, random_mapping_state], outputs=[selected_random_state])
+    popular_gallery.select(gallery_select, inputs=[popular_gallery, popular_mapping_state], outputs=[selected_popular_state])
+    recommended_gallery.select(gallery_select, inputs=[recommended_gallery, recommended_mapping_state], outputs=[selected_recommended_state])
 
-    # gallery selection handlers
-    random_gallery.select(set_selected, inputs=[random_gallery], outputs=[selected_random_state])
-    popular_gallery.select(set_selected, inputs=[popular_gallery], outputs=[selected_popular_state])
-    recommended_gallery.select(set_selected, inputs=[recommended_gallery], outputs=[selected_recommended_state])
-
-    # like buttons
+    # Like buttons
     random_like_btn.click(like_from_shelf,
-                          inputs=[selected_random_state, random_indices_state, liked_books_state],
-                          outputs=[liked_books_state, liked_gallery, liked_indices_state, recommended_gallery, recommended_indices_state, selected_random_state])
-
+                          inputs=[selected_random_state, liked_books_state],
+                          outputs=[liked_books_state, liked_gallery, liked_books_state, recommended_gallery, recommended_indices_state])
     popular_like_btn.click(like_from_shelf,
-                           inputs=[selected_popular_state, popular_indices_state, liked_books_state],
-                           outputs=[liked_books_state, liked_gallery, liked_indices_state, recommended_gallery, recommended_indices_state, selected_popular_state])
-
+                           inputs=[selected_popular_state, liked_books_state],
+                           outputs=[liked_books_state, liked_gallery, liked_books_state, recommended_gallery, recommended_indices_state])
     recommended_like_btn.click(like_from_shelf,
-                               inputs=[selected_recommended_state, recommended_indices_state, liked_books_state],
-                               outputs=[liked_books_state, liked_gallery, liked_indices_state, recommended_gallery, recommended_indices_state, selected_recommended_state])
+                               inputs=[selected_recommended_state, liked_books_state],
+                               outputs=[liked_books_state, liked_gallery, liked_books_state, recommended_gallery, recommended_indices_state])
 
 demo.launch(ssr_mode=False)
