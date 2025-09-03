@@ -134,11 +134,11 @@ with gr.Blocks() as demo:
 
     # ---------------- Random Books ----------------
     gr.Markdown("### 🎲 Random Books")
-    random_gallery = gr.Gallery(label="", columns=3, elem_classes="small-gallery")
+    random_gallery = gr.Gallery(label="", columns=7, elem_classes="small-gallery")
 
     # ---------------- Popular Books ----------------
     gr.Markdown("### ⭐ Popular Books")
-    popular_gallery = gr.Gallery(label="", columns=3, elem_classes="small-gallery")
+    popular_gallery = gr.Gallery(label="", columns=7, elem_classes="small-gallery")
     load_more_popular_btn = gr.Button("Load More Popular")
 
     # ---------------- Recommended Books ----------------
