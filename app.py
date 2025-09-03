@@ -101,11 +101,13 @@ def load_more_popular(page, current_gallery):
 def search_random_books(query, genre_filter):
     return get_random_books(query, genre_filter)
 
-def add_like(book_idx, liked_books):
+def add_like(evt: gr.SelectData, liked_books):
+    book_idx = evt.index  # index of the clicked item in the gallery
     liked_books = list(liked_books)
     if book_idx not in liked_books:
         liked_books.append(book_idx)
     return liked_books, get_recommendations(liked_books)
+
 
 # ------------------- Build Gradio App -------------------
 all_genres = sorted({g for sublist in df["genres"] for g in sublist})
@@ -154,9 +156,12 @@ with gr.Blocks() as demo:
     # Like buttons for all galleries
     # Gradio doesn't allow embedding button per gallery item, so we simulate by returning index on click
     # We'll use `select` event: when a gallery item is clicked, treat it as "like"
-    random_gallery.select(add_like, inputs=[gr.State(lambda x: x), liked_books_state],
-                          outputs=[liked_books_state, recommended_gallery])
-    popular_gallery.select(add_like, inputs=[gr.State(lambda x: x), liked_books_state],
-                           outputs=[liked_books_state, recommended_gallery])
+    
+    # User selects a book in Random Gallery → add to liked_books and update recommendations
+    random_gallery.select(add_like, inputs=[liked_books_state], outputs=[liked_books_state, recommended_gallery])
+
+    # User selects a book in Popular Gallery → same behavior
+    popular_gallery.select(add_like, inputs=[liked_books_state], outputs=[liked_books_state, recommended_gallery])
+
 
 demo.launch()
