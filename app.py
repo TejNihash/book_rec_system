@@ -33,11 +33,11 @@ def search_books(query):
     # Build gallery items
     gallery_data = []
     for _, row in filtered.iterrows():
-        print(row["image"])  # <--- check URLs
+        print(row["image_url"])  # <--- check URLs
         authors_str = ", ".join(row["authors"])
         genres_str = ", ".join(row["genres"])
         caption = f"**{row['title']}**\nby {authors_str}\n*{genres_str}*"
-        gallery_data.append((row["image"], caption))
+        gallery_data.append((row["image_url"], caption))
     
     print("Gallery items:", len(gallery_data))
     return gallery_data
