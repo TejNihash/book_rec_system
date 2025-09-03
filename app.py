@@ -205,4 +205,4 @@ with gr.Blocks() as demo:
     recommended_like_btn.click(like_from_shelf, inputs=[selected_recommended_state, liked_books_state],
                                outputs=[liked_books_state, liked_gallery, liked_books_state, recommended_gallery, recommended_indices_state])
 
-demo.launch(ssr=False)
+demo.launch(ssr_mode=False)
