@@ -105,20 +105,17 @@ def load_more_popular(page, current_indices):
     return gallery, updated_indices, page + 1, gr.update(visible=has_next)
 
 def set_selected(evt, gallery_indices):
-    try:
-        return int(evt.index)
-    except Exception:
+    if evt is None or gallery_indices is None:
         return None
+    return gallery_indices[int(evt.index)]
 
-def like_from_shelf(selected_pos, gallery_indices, liked_books):
-    gallery_indices = list(gallery_indices or [])
+def like_from_shelf(selected_idx, _, liked_books):
     liked_books = list(liked_books or [])
-    if selected_pos is None or selected_pos < 0 or selected_pos >= len(gallery_indices):
+    if selected_idx is None:
         liked_gallery = make_gallery_data_from_indices(liked_books)
         return liked_books, liked_gallery, liked_books, [], [], None
-    book_idx = int(gallery_indices[selected_pos])
-    if book_idx not in liked_books:
-        liked_books.append(book_idx)
+    if selected_idx not in liked_books:
+        liked_books.append(selected_idx)
     liked_gallery = make_gallery_data_from_indices(liked_books)
     rec_gallery, rec_indices = get_recommendations_gallery(liked_books, top_n=20)
     return liked_books, liked_gallery, liked_books, rec_gallery, rec_indices, None
@@ -130,10 +127,11 @@ with gr.Blocks() as demo:
     gr.HTML("""
     <style>
       .book-shelf {
-          display: flex;
+          display: flex !important;
           overflow-x: auto !important;
           overflow-y: hidden !important;
-          white-space: nowrap;
+          white-space: nowrap !important;
+          height: 140px;
       }
       .book-shelf img {
           width: 80px;
@@ -145,9 +143,9 @@ with gr.Blocks() as demo:
       .book-shelf .gallery-selected img {
           width: 150px !important;
           height: auto !important;
-          max-height: 220px !important;
+          max-height: 200px !important;
           object-fit: contain;
-          margin: 6px auto;
+          margin: 4px auto;
           display: block;
       }
       .section-title { margin-top: 12px; margin-bottom: 6px; }
@@ -155,9 +153,8 @@ with gr.Blocks() as demo:
     </style>
     """)
 
-    # Top controls
     with gr.Row():
-        search_box = gr.Textbox(label="Search by title or author", placeholder="e.g. Aesop, Dune", value="")
+        search_box = gr.Textbox(label="Search by title/author", placeholder="e.g. Dune, Aesop", value="")
         genre_dropdown = gr.Dropdown(label="Filter by genre", choices=all_genres, value=None, multiselect=False)
 
     # States
@@ -168,31 +165,31 @@ with gr.Blocks() as demo:
     popular_page_state = gr.State(0)
     recommended_indices_state = gr.State([])
     selected_recommended_state = gr.State(None)
-    liked_indices_state = gr.State([])
     liked_books_state = gr.State([])
+    liked_indices_state = gr.State([])
 
-    # ---------------- Random Shelf ----------------
+    # ---------------- Random ----------------
     gr.Markdown("<div class='section-title'>🎲 Random Books</div>")
-    random_gallery = gr.Gallery(rows=1, columns=None, elem_classes="book-shelf", show_label=False)
+    random_gallery = gr.Gallery(rows=1, columns=None, elem_classes="book-shelf", show_label=False, preview=True)
     with gr.Row():
         random_like_btn = gr.Button("❤️ Like Selected (Random)")
         shuffle_random_btn = gr.Button("🔀 Shuffle Random")
 
-    # ---------------- Popular Shelf ----------------
+    # ---------------- Popular ----------------
     gr.Markdown("<div class='section-title'>⭐ Popular Books</div>")
-    popular_gallery = gr.Gallery(rows=1, columns=None, elem_classes="book-shelf", show_label=False)
+    popular_gallery = gr.Gallery(rows=1, columns=None, elem_classes="book-shelf", show_label=False, preview=True)
     with gr.Row():
         load_more_popular_btn = gr.Button("Load More Popular")
         popular_like_btn = gr.Button("❤️ Like Selected (Popular)")
 
-    # ---------------- Recommended Shelf ----------------
+    # ---------------- Recommended ----------------
     gr.Markdown("<div class='section-title'>💡 Recommended Books</div>")
-    recommended_gallery = gr.Gallery(rows=1, columns=None, elem_classes="book-shelf", show_label=False)
+    recommended_gallery = gr.Gallery(rows=1, columns=None, elem_classes="book-shelf", show_label=False, preview=True)
     recommended_like_btn = gr.Button("❤️ Like Selected (Recommended)")
 
-    # ---------------- Liked Shelf ----------------
+    # ---------------- Liked ----------------
     gr.Markdown("<div class='section-title'>❤️ Liked Books</div>")
-    liked_gallery = gr.Gallery(rows=1, columns=None, elem_classes="book-shelf", show_label=False)
+    liked_gallery = gr.Gallery(rows=1, columns=None, elem_classes="book-shelf", show_label=False, preview=True)
 
     # ---------------- INITIAL LOADS ----------------
     demo.load(random_gallery_init, inputs=[], outputs=[random_gallery, random_indices_state, selected_random_state])
@@ -203,7 +200,7 @@ with gr.Blocks() as demo:
     # ---------------- INTERACTIONS ----------------
     search_box.submit(search_random, inputs=[search_box, genre_dropdown], outputs=[random_gallery, random_indices_state, selected_random_state])
     genre_dropdown.change(search_random, inputs=[search_box, genre_dropdown], outputs=[random_gallery, random_indices_state, selected_random_state])
-    shuffle_random_btn.click(lambda: random_gallery_init(), inputs=[], outputs=[random_gallery, random_indices_state, selected_random_state])
+    shuffle_random_btn.click(random_gallery_init, inputs=[], outputs=[random_gallery, random_indices_state, selected_random_state])
 
     load_more_popular_btn.click(load_more_popular, inputs=[popular_page_state, popular_indices_state],
                                 outputs=[popular_gallery, popular_indices_state, popular_page_state, load_more_popular_btn])
