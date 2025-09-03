@@ -64,8 +64,11 @@ def filter_books(query="", genre_filter=""):
 # ---------------- RECOMMENDER ----------------
 def get_recommendations_gallery(liked_indices, top_n=20):
     if not liked_indices:
-        return [], []
-    liked_indices = list(liked_indices)
+        # fallback: top rated books
+        top_df = df.sort_values("average_rating", ascending=False).head(top_n)
+        indices = list(top_df.index)
+        return make_gallery_data_from_indices(indices), indices
+
     avg_embed = combined_matrix[liked_indices].mean(axis=0)
     if hasattr(avg_embed, "A"):
         avg_vec = np.asarray(avg_embed.A1)
@@ -109,25 +112,32 @@ def load_more_popular(page, current_indices):
     has_next = end < len(sorted_df)
     return gallery, updated_indices, page + 1, gr.update(visible=has_next)
 
+# ---------------- SELECTION HANDLER ----------------
+def set_selected(val):
+    """
+    Maps gallery item to dataframe index.
+    """
+    if val is None:
+        return None
+    if isinstance(val, (list, tuple)) and len(val) >= 1:
+        img_url = val[0]
+        matches = df.index[df["image_url"] == img_url].tolist()
+        if matches:
+            return int(matches[0])
+    return None
+
 # ---------------- LIKE HANDLER ----------------
-def like_from_shelf(selected_pos, gallery_indices, liked_books):
-    logger.info(f"like_from_shelf: selected_pos={selected_pos}, gallery_indices(len)={len(gallery_indices)}, liked_books={liked_books}")
+def like_from_shelf(selected_idx, gallery_indices, liked_books):
+    if selected_idx is None:
+        return liked_books, make_gallery_data_from_indices(liked_books), liked_books, *get_recommendations_gallery(liked_books), None
 
-    if selected_pos is None:
-        return liked_books, make_gallery_data_from_indices(liked_books), liked_books, [], [], None
-
-    if selected_pos < 0 or selected_pos >= len(gallery_indices):
-        return liked_books, make_gallery_data_from_indices(liked_books), liked_books, [], [], None
-
-    df_idx = int(gallery_indices[selected_pos])
-
+    df_idx = selected_idx
     liked_books = list(liked_books or [])
     if df_idx not in liked_books:
         liked_books.append(df_idx)
 
     liked_gallery = make_gallery_data_from_indices(liked_books)
-    rec_gallery, rec_indices = get_recommendations_gallery(liked_books, top_n=20)
-
+    rec_gallery, rec_indices = get_recommendations_gallery(liked_books)
     return liked_books, liked_gallery, liked_books, rec_gallery, rec_indices, None
 
 # ---------------- UI ----------------
@@ -154,10 +164,9 @@ with gr.Blocks() as demo:
     liked_books_state = gr.State([])
     liked_indices_state = gr.State([])
 
-    # new hidden states to capture selection positions
-    selected_random_pos = gr.State(None)
-    selected_popular_pos = gr.State(None)
-    selected_recommended_pos = gr.State(None)
+    selected_random_state = gr.State(None)
+    selected_popular_state = gr.State(None)
+    selected_recommended_state = gr.State(None)
 
     # ---------------- Random ----------------
     gr.Markdown("🎲 Random Books")
@@ -185,7 +194,7 @@ with gr.Blocks() as demo:
     # ---------------- INITIAL LOADS ----------------
     demo.load(random_gallery_init, inputs=[], outputs=[random_gallery, random_indices_state])
     demo.load(init_popular, inputs=[], outputs=[popular_gallery, popular_indices_state, popular_page_state, load_more_popular_btn])
-    demo.load(lambda: ([], []), inputs=[], outputs=[recommended_gallery, recommended_indices_state])
+    demo.load(lambda: get_recommendations_gallery([]), inputs=[], outputs=[recommended_gallery, recommended_indices_state])
     demo.load(lambda: ([], []), inputs=[], outputs=[liked_gallery, liked_indices_state])
 
     # ---------------- INTERACTIONS ----------------
@@ -196,22 +205,22 @@ with gr.Blocks() as demo:
     load_more_popular_btn.click(load_more_popular, inputs=[popular_page_state, popular_indices_state],
                                 outputs=[popular_gallery, popular_indices_state, popular_page_state, load_more_popular_btn])
 
-    # capture selection index via JS
-    random_gallery.select(None, _js="(val, evt) => evt.index", outputs=selected_random_pos)
-    popular_gallery.select(None, _js="(val, evt) => evt.index", outputs=selected_popular_pos)
-    recommended_gallery.select(None, _js="(val, evt) => evt.index", outputs=selected_recommended_pos)
+    # gallery selection handlers
+    random_gallery.select(set_selected, inputs=[random_gallery], outputs=[selected_random_state])
+    popular_gallery.select(set_selected, inputs=[popular_gallery], outputs=[selected_popular_state])
+    recommended_gallery.select(set_selected, inputs=[recommended_gallery], outputs=[selected_recommended_state])
 
     # like buttons
     random_like_btn.click(like_from_shelf,
-                          inputs=[selected_random_pos, random_indices_state, liked_books_state],
-                          outputs=[liked_books_state, liked_gallery, liked_indices_state, recommended_gallery, recommended_indices_state, selected_random_pos])
+                          inputs=[selected_random_state, random_indices_state, liked_books_state],
+                          outputs=[liked_books_state, liked_gallery, liked_indices_state, recommended_gallery, recommended_indices_state, selected_random_state])
 
     popular_like_btn.click(like_from_shelf,
-                           inputs=[selected_popular_pos, popular_indices_state, liked_books_state],
-                           outputs=[liked_books_state, liked_gallery, liked_indices_state, recommended_gallery, recommended_indices_state, selected_popular_pos])
+                           inputs=[selected_popular_state, popular_indices_state, liked_books_state],
+                           outputs=[liked_books_state, liked_gallery, liked_indices_state, recommended_gallery, recommended_indices_state, selected_popular_state])
 
     recommended_like_btn.click(like_from_shelf,
-                               inputs=[selected_recommended_pos, recommended_indices_state, liked_books_state],
-                               outputs=[liked_books_state, liked_gallery, liked_indices_state, recommended_gallery, recommended_indices_state, selected_recommended_pos])
+                               inputs=[selected_recommended_state, recommended_indices_state, liked_books_state],
+                               outputs=[liked_books_state, liked_gallery, liked_indices_state, recommended_gallery, recommended_indices_state, selected_recommended_state])
 
 demo.launch(ssr_mode=False)
