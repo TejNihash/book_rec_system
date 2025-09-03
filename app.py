@@ -112,4 +112,7 @@ with gr.Blocks() as demo:
         return gr.update(visible=has_next)
     load_more_button.click(toggle_button, inputs=[load_more_button], outputs=[load_more_button])
 
+    # Initial load
+    demo.load(search_books, inputs=gr.Textbox(value=""), outputs=gallery)
+
 demo.launch()
