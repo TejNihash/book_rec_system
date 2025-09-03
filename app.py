@@ -65,8 +65,19 @@ with gr.Blocks() as demo:
     )
     
     gallery = gr.Gallery(
-        label="Books", show_label=False, columns=3, height="auto", scroll=True
+        label="Books", show_label=False, columns=3, height="auto"
     )
+
+        # Inject CSS to resize images
+    demo.add_html("""
+    <style>
+        .small-gallery img {
+            width: 120px;   /* adjust width */
+            height: 180px;  /* adjust height */
+            object-fit: cover;
+        }
+    </style>
+    """)
     
     load_more_button = gr.Button("Load More")
     
