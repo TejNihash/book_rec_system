@@ -66,6 +66,8 @@ def get_recommendations_gallery(liked_indices, top_n=20):
         avg_vec = np.asarray(avg_embed.A1)
     else:
         avg_vec = np.asarray(avg_embed).ravel()
+
+    print("the recommended shit is: ",avg_vec)
     sims = cosine_similarity(combined_matrix, avg_vec.reshape(1, -1)).ravel()
     ratings = df["average_rating"].fillna(0).values
     final_scores = ALPHA * ratings + (1 - ALPHA) * sims
