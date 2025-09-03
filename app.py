@@ -56,6 +56,17 @@ def load_more(query, page):
     return gallery_data, page, has_next
 
 with gr.Blocks() as demo:
+    # Inject CSS
+    gr.HTML("""
+    <style>
+        .small-gallery img {
+            width: 120px;   /* adjust width */
+            height: 180px;  /* adjust height */
+            object-fit: cover;
+        }
+    </style>
+    """)
+
     gr.Markdown("# 📚 My Book Showcase")
     
     search_box = gr.Textbox(
@@ -65,19 +76,9 @@ with gr.Blocks() as demo:
     )
     
     gallery = gr.Gallery(
-        label="Books", show_label=False, columns=3, height="auto"
+        label="Books", show_label=False, columns=3, height="auto", elem_classes="small-gallery"
     )
 
-        # Inject CSS to resize images
-    demo.add_html("""
-    <style>
-        .small-gallery img {
-            width: 120px;   /* adjust width */
-            height: 180px;  /* adjust height */
-            object-fit: cover;
-        }
-    </style>
-    """)
     
     load_more_button = gr.Button("Load More")
     
