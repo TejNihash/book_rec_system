@@ -2,7 +2,7 @@ import gradio as gr
 import pandas as pd
 
 # Load your dataset
-df = pd.read_csv("books.csv")  # assumes columns: title, authors, genres, img_url
+df = pd.read_csv("data_mini_books.csv")  # assumes columns: title, authors, genres, img_url
 
 def display_books(genre_filter):
     # Filter by genre if selected
@@ -15,7 +15,7 @@ def display_books(genre_filter):
     gallery_data = []
     for _, row in filtered.iterrows():
         caption = f"**{row['title']}**\nby {row['authors']}\n*{row['genres']}*"
-        gallery_data.append([row['img_url'], caption])
+        gallery_data.append([row['image_url'], caption])
     
     return gallery_data
 
