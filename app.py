@@ -328,4 +328,4 @@ with gr.Blocks() as demo:
         outputs=[liked_books_state, liked_gallery, liked_indices_state, recommended_gallery, recommended_indices_state, selected_recommended_state]
     )
 
-demo.launch()
+demo.launch(ssr_mode = False)
