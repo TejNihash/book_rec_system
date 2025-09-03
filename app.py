@@ -109,16 +109,24 @@ def set_selected(evt, gallery_indices):
         return None
     return gallery_indices[int(evt.index)]
 
-def like_from_shelf(selected_idx, _, liked_books):
+def like_from_shelf(selected_idx, gallery_indices, liked_books):
     liked_books = list(liked_books or [])
-    if selected_idx is None:
-        liked_gallery = make_gallery_data_from_indices(liked_books)
-        return liked_books, liked_gallery, liked_books, [], [], None
-    if selected_idx not in liked_books:
+    gallery_indices = list(gallery_indices or [])
+    
+    if selected_idx is not None and selected_idx not in liked_books:
         liked_books.append(selected_idx)
+    
+    # Update liked gallery
     liked_gallery = make_gallery_data_from_indices(liked_books)
+    
+    # Always recompute recommendations
     rec_gallery, rec_indices = get_recommendations_gallery(liked_books, top_n=20)
-    return liked_books, liked_gallery, liked_books, rec_gallery, rec_indices, None
+    
+    # Reset selection in recommended gallery to None
+    selected_rec_state = None
+    
+    return liked_books, liked_gallery, liked_books, rec_gallery, rec_indices, selected_rec_state
+
 
 # ---------------- UI ----------------
 all_genres = sorted({g for sub in df["genres"] for g in sub})
