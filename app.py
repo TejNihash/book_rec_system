@@ -3,7 +3,7 @@ import pandas as pd
 import ast
 
 # Load dataset
-df = pd.read_csv("data_mini_books.csv")[1:500]  # title, authors, genres, image_url
+df = pd.read_csv("data_mini_books.csv")  # title, authors, genres, image_url
 
 # Convert authors/genres from string -> Python list
 df["authors"] = df["authors"].apply(lambda x: ast.literal_eval(x) if isinstance(x, str) else x)
@@ -14,8 +14,13 @@ df["title_lower"] = df["title"].str.lower()
 df["authors_lower"] = df["authors"].apply(lambda lst: [a.lower() for a in lst])
 df["genres_lower"] = df["genres"].apply(lambda lst: [g.lower() for g in lst])
 
-def search_books(query):
+# Pagination settings
+PAGE_SIZE = 20  # number of books per page
+
+def search_books(query, page=0):
     query = query.strip().lower()
+    
+    # Filter dataset
     if query:
         mask_title = df["title_lower"].str.contains(query)
         mask_authors = df["authors_lower"].apply(lambda lst: any(query in a for a in lst))
@@ -23,34 +28,65 @@ def search_books(query):
         filtered = df[mask_title | mask_authors | mask_genres]
     else:
         filtered = df
+
+    # Optional: show only top 500 results for performance
+    filtered = filtered.head(500)
     
-    gallery_data = []
-    for _, row in filtered.iterrows():
-        authors_str = ", ".join(row["authors"])
-        genres_str = ", ".join(row["genres"])
-        caption = f"**{row['title']}**\nby {authors_str}\n*{genres_str}*"
-        gallery_data.append((row["image_url"], caption))
+    # Pagination
+    start = page * PAGE_SIZE
+    end = start + PAGE_SIZE
+    page_data = filtered.iloc[start:end]
+
+    # Prepare gallery data
+    gallery_data = [
+        (img, f"**{title}**\nby {', '.join(authors)}\n*{', '.join(genres)}*")
+        for img, title, authors, genres in zip(
+            page_data["image_url"], page_data["title"], page_data["authors"], page_data["genres"]
+        )
+    ]
     
-    return gallery_data
+    # Return gallery + next page availability
+    has_next = end < len(filtered)
+    return gallery_data, has_next
+
+# For handling "Load More" button
+def load_more(query, page):
+    page += 1
+    gallery_data, has_next = search_books(query, page)
+    return gallery_data, page, has_next
 
 with gr.Blocks() as demo:
     gr.Markdown("# 📚 My Book Showcase")
     
-    with gr.Row():
-        search_box = gr.Textbox(
-            label="Search by title, author, or genre",
-            placeholder="e.g. Aesop, fantasy, Dune...",
-            value=""
-        )
-    
-    gallery = gr.Gallery(
-        label="Books", show_label=False, columns=3, height="auto"
+    search_box = gr.Textbox(
+        label="Search by title, author, or genre",
+        placeholder="e.g. Aesop, fantasy, Dune...",
+        value=""
     )
     
-    search_box.change(search_books, inputs=search_box, outputs=gallery)
+    gallery = gr.Gallery(
+        label="Books", show_label=False, columns=3, height="auto", scroll=True
+    )
     
-    # Initial load
-    demo.load(search_books, inputs=gr.Textbox(value=""), outputs=gallery)
+    load_more_button = gr.Button("Load More")
+    
+    # Hidden state to track current page
+    page_state = gr.State(0)
+    
+    # Initial search/load
+    def initial_load(query):
+        gallery_data, has_next = search_books(query, page=0)
+        return gallery_data, 0, has_next
+    
+    search_box.submit(initial_load, inputs=search_box, outputs=[gallery, page_state, load_more_button])
+    
+    # Load more functionality
+    load_more_button.click(load_more, inputs=[search_box, page_state], outputs=[gallery, page_state, load_more_button])
+    
+    # Hide "Load More" button if no next page
+    def toggle_load_more(has_next):
+        return gr.update(visible=has_next)
+    
+    load_more_button.click(toggle_load_more, inputs=[load_more_button], outputs=[load_more_button])
 
 demo.launch()
-
