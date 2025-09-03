@@ -39,16 +39,18 @@ with gr.Blocks() as demo:
     with gr.Row():
         search_box = gr.Textbox(
             label="Search by title, author, or genre",
-            placeholder="e.g. Aesop, fantasy, Dune..."
+            placeholder="e.g. Aesop, fantasy, Dune...",
+            value=""
         )
     
     gallery = gr.Gallery(
-        label="Books", show_label=False, columns=3, height="auto"
+        label="Books", show_label=False, columns=3, height="auto",scroll = True
     )
     
     search_box.change(search_books, inputs=search_box, outputs=gallery)
     
-    # Initial load (show all books)
-    demo.load(search_books, inputs=search_box, outputs=gallery)
+    # Initial load
+    demo.load(search_books, inputs=gr.Textbox(value=""), outputs=gallery)
 
 demo.launch()
+
