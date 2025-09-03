@@ -43,8 +43,9 @@ def make_gallery_data(indices):
     for idx in indices:
         row = df.iloc[idx]
         caption = f"**{row['title']}**\nby {', '.join(row['authors'])}\n*{', '.join(row['genres'])}*"
-        data.append((row["image_url"], caption, idx))  # include idx for like button
+        data.append((row["image_url"], caption))
     return data
+
 
 def filter_books(query="", genre_filter=""):
     query = query.strip().lower()
@@ -102,11 +103,15 @@ def search_random_books(query, genre_filter):
     return get_random_books(query, genre_filter)
 
 def add_like(evt: gr.SelectData, liked_books):
-    book_idx = evt.index  # index of the clicked item in the gallery
+    image_url = evt.value[0]
+    book_idx = df.index[df["image_url"] == image_url][0]
+
     liked_books = list(liked_books)
     if book_idx not in liked_books:
         liked_books.append(book_idx)
+
     return liked_books, get_recommendations(liked_books)
+
 
 
 # ------------------- Build Gradio App -------------------
