@@ -3,11 +3,16 @@ import pandas as pd
 import ast
 
 # Load dataset
-df = pd.read_csv("data_mini_books.csv")  # title, authors, genres, img_url
+df = pd.read_csv("data_mini_books.csv")  # title, authors, genres, image
 
 # Convert authors/genres from string -> Python list
 df["authors"] = df["authors"].apply(lambda x: ast.literal_eval(x) if isinstance(x, str) else x)
 df["genres"] = df["genres"].apply(lambda x: ast.literal_eval(x) if isinstance(x, str) else x)
+
+# Precompute lowercase versions for faster search
+df["title_lower"] = df["title"].str.lower()
+df["authors_lower"] = df["authors"].apply(lambda lst: [a.lower() for a in lst])
+df["genres_lower"] = df["genres"].apply(lambda lst: [g.lower() for g in lst])
 
 def search_books(query):
     query = query.strip().lower()
@@ -15,9 +20,9 @@ def search_books(query):
         filtered = df[
             df.apply(
                 lambda row: (
-                    query in row["title"].lower()
-                    or any(query in a.lower() for a in row["authors"])
-                    or any(query in g.lower() for g in row["genres"])
+                    query in row["title_lower"]
+                    or any(query in a for a in row["authors_lower"])
+                    or any(query in g for g in row["genres_lower"])
                 ),
                 axis=1,
             )
@@ -31,7 +36,7 @@ def search_books(query):
         authors_str = ", ".join(row["authors"])
         genres_str = ", ".join(row["genres"])
         caption = f"**{row['title']}**\nby {authors_str}\n*{genres_str}*"
-        gallery_data.append([row["image_url"], caption])
+        gallery_data.append((row["image"], caption))  # tuple: (image_url, caption)
     
     return gallery_data
 
