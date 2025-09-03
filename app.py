@@ -44,7 +44,7 @@ with gr.Blocks() as demo:
         )
     
     gallery = gr.Gallery(
-        label="Books", show_label=False, columns=3, height="auto",scroll = True
+        label="Books", show_label=False, columns=3, height="auto"
     )
     
     search_box.change(search_books, inputs=search_box, outputs=gallery)
