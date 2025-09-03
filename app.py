@@ -66,8 +66,6 @@ def get_recommendations_gallery(liked_indices, top_n=20):
         avg_vec = np.asarray(avg_embed.A1)
     else:
         avg_vec = np.asarray(avg_embed).ravel()
-
-    print("the recommended shit is: ",avg_vec)
     sims = cosine_similarity(combined_matrix, avg_vec.reshape(1, -1)).ravel()
     ratings = df["average_rating"].fillna(0).values
     final_scores = ALPHA * ratings + (1 - ALPHA) * sims
@@ -106,35 +104,34 @@ def load_more_popular(page, current_indices):
     has_next = end < len(sorted_df)
     return gallery, updated_indices, page + 1, gr.update(visible=has_next)
 
+# ---------------- SELECTION ----------------
 def set_selected(evt):
     if evt is None or evt.index is None:
         return None
-    return int(evt.index)  # This will now be a valid index into df
+    return int(evt.index)  # now returns valid df index
 
 # ---------------- LIKE / RECOMMEND ----------------
 def like_from_shelf(selected_idx, gallery_indices, liked_books):
     liked_books = list(liked_books or [])
     gallery_indices = list(gallery_indices or [])
 
-    # Add selected book to liked books
+    # Only add if a book is selected
     if selected_idx is not None and selected_idx not in liked_books:
         liked_books.append(selected_idx)
 
     # Update liked gallery
     liked_gallery = make_gallery_data_from_indices(liked_books)
 
-    # Update recommendations if we have liked books
+    # Compute recommendations
     if liked_books:
         rec_gallery, rec_indices = get_recommendations_gallery(liked_books, top_n=20)
     else:
         rec_gallery, rec_indices = [], []
 
-    # Reset all selections
-    selected_random_state = None
-    selected_popular_state = None
-    selected_rec_state = None
+    # Reset selection for the gallery that triggered the like
+    selected_state_reset = None
 
-    return liked_books, liked_gallery, liked_books, rec_gallery, rec_indices, selected_random_state
+    return liked_books, liked_gallery, liked_books, rec_gallery, rec_indices, selected_state_reset
 
 # ---------------- INITIAL RECOMMENDATIONS ----------------
 def init_recommendations():
@@ -172,7 +169,6 @@ with gr.Blocks() as demo:
           display: block;
       }
       .section-title { margin-top: 12px; margin-bottom: 6px; }
-      .controls { margin-top:4px; margin-bottom:10px; }
     </style>
     """)
 
@@ -236,19 +232,19 @@ with gr.Blocks() as demo:
     random_like_btn.click(
         like_from_shelf,
         inputs=[selected_random_state, random_indices_state, liked_books_state],
-        outputs=[liked_books_state, liked_gallery, liked_indices_state, recommended_gallery, recommended_indices_state,selected_random_state]
+        outputs=[liked_books_state, liked_gallery, liked_indices_state, recommended_gallery, recommended_indices_state, selected_random_state]
     )
 
     popular_like_btn.click(
         like_from_shelf,
         inputs=[selected_popular_state, popular_indices_state, liked_books_state],
-        outputs=[liked_books_state, liked_gallery, liked_indices_state, recommended_gallery, recommended_indices_state,selected_popular_state]
+        outputs=[liked_books_state, liked_gallery, liked_indices_state, recommended_gallery, recommended_indices_state, selected_popular_state]
     )
 
     recommended_like_btn.click(
         like_from_shelf,
         inputs=[selected_recommended_state, recommended_indices_state, liked_books_state],
-        outputs=[liked_books_state, liked_gallery, liked_indices_state, recommended_gallery, recommended_indices_state,selected_recommended_state]
+        outputs=[liked_books_state, liked_gallery, liked_indices_state, recommended_gallery, recommended_indices_state, selected_recommended_state]
     )
 
 demo.launch()
