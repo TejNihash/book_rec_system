@@ -15,7 +15,7 @@ def display_books(genre_filter):
     gallery_data = []
     for _, row in filtered.iterrows():
         caption = f"**{row['title']}**\nby {row['authors']}\n*{row['genres']}*"
-        gallery_data.append([row['image_url'], caption])
+        gallery_data.append([row['img_url'], caption])
     
     return gallery_data
 
@@ -29,8 +29,8 @@ with gr.Blocks() as demo:
             value="All"
         )
     
-    gallery = gr.Gallery(label="Books", show_label=False).style(
-        grid=[3], height="auto"
+    gallery = gr.Gallery(
+        label="Books", show_label=False, columns=3, height="auto"
     )
     
     genre_dropdown.change(display_books, inputs=genre_dropdown, outputs=gallery)
