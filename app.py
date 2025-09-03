@@ -22,7 +22,7 @@ def display_books(genre_filter):
         authors_str = ", ".join(row["authors"])
         genres_str = ", ".join(row["genres"])
         caption = f"**{row['title']}**\nby {authors_str}\n*{genres_str}*"
-        gallery_data.append([row["img_url"], caption])
+        gallery_data.append([row["image_url"], caption])
     
     return gallery_data
 
