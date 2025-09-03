@@ -113,18 +113,22 @@ def load_more_popular(page, current_indices):
     return gallery, updated_indices, page + 1, gr.update(visible=has_next)
 
 # ---------------- SELECTION HANDLER ----------------
-def set_selected(val):
+def set_selected(gallery_item):
     """
-    Maps gallery item to dataframe index.
+    Receives a selected gallery item (image_url, caption tuple) and maps to df index.
     """
-    if val is None:
+    if gallery_item is None:
+        logger.info("set_selected: no item selected")
         return None
-    if isinstance(val, (list, tuple)) and len(val) >= 1:
-        img_url = val[0]
-        matches = df.index[df["image_url"] == img_url].tolist()
-        if matches:
-            return int(matches[0])
+    img_url = gallery_item[0]
+    match = df.index[df["image_url"] == img_url]
+    if not match.empty:
+        idx = int(match[0])
+        logger.info(f"set_selected: mapped image_url to df index {idx}")
+        return idx
+    logger.warning("set_selected: could not map image_url")
     return None
+
 
 # ---------------- LIKE HANDLER ----------------
 def like_from_shelf(selected_idx, gallery_indices, liked_books):
