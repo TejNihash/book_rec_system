@@ -10,36 +10,48 @@ df["authors"] = df["authors"].apply(lambda x: ast.literal_eval(x) if isinstance(
 df["genres"] = df["genres"].apply(lambda x: ast.literal_eval(x) if isinstance(x, str) else x)
 
 # ---------------- HELPERS ----------------
-def make_dataset_samples(indices):
-    """Return list of [image, text] for gr.Dataset"""
+def make_gallery_data(indices):
     out = []
     for idx in indices:
         row = df.iloc[int(idx)]
-        caption = f"{row['title']}\nby {', '.join(row['authors'])}\n{', '.join(row['genres'])}"
-        out.append([row["image_url"], caption])
-    if not out:
-        out = [["https://via.placeholder.com/80x120?text=No+Books", "No books"]]
+        caption = f"{row['title']}\nby {', '.join(row['authors'])}"
+        out.append((row["image_url"], caption))
     return out
 
 def get_popular_books():
     sorted_df = df.sort_values("ratings_count", ascending=False)
     top_indices = list(sorted_df.head(20).index)
-    return make_dataset_samples(top_indices), top_indices
+    return make_gallery_data(top_indices), top_indices
 
 # ---------------- UI ----------------
-with gr.Blocks() as demo:
-    gr.Markdown("## 🔥 Popular Books Carousel (Dataset)")
+with gr.Blocks(css="""
+.book-shelf .gr-gallery-item {
+    border: 2px solid #ddd;
+    border-radius: 8px;
+    padding: 5px;
+    margin: 5px;
+    text-align: center;
+    box-shadow: 2px 2px 6px #ccc;
+}
+.book-shelf .gr-gallery-item img {
+    width: 120px;
+    height: 180px;
+    object-fit: cover;
+}
+""") as demo:
+    gr.Markdown("## 🔥 Popular Books Carousel")
 
-    popular_dataset = gr.Dataset(
-        components=[gr.Image(), gr.Textbox()],
-        samples=[],
-        type="index",
-        label="Popular Books"
+    popular_gallery = gr.Gallery(
+        label="Popular Books",
+        rows=1,
+        columns=None,   # auto-fit multiple books
+        show_label=False,
+        elem_classes="book-shelf",
+        preview=True
     )
 
     popular_indices_state = gr.State([])
 
-    # Load popular books at startup
-    demo.load(get_popular_books, inputs=[], outputs=[popular_dataset, popular_indices_state])
+    demo.load(get_popular_books, inputs=[], outputs=[popular_gallery, popular_indices_state])
 
 demo.launch()
