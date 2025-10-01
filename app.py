@@ -33,16 +33,16 @@ def get_random_books(n=RANDOM_SAMPLE_SIZE, query=""):
         elif len(filtered) <= n:
             return filtered
         else:
-            return filtered.sample(n=n, random_state=42)
+            return filtered.sample(n=n)
     else:
         # No query - return true random sample
         if len(df) <= n:
             return df
-        return df.sample(n=n, random_state=42)
+        return df.sample(n=n)
 
 def get_popular_books(page=0):
     """Get paginated popular books (unaffected by search)"""
-    # Show popular books (first N books, or you could sort by rating if available)
+    # Show popular books (first N books)
     filtered = df
     
     # Pagination
@@ -50,77 +50,94 @@ def get_popular_books(page=0):
     end = start + POPULAR_PAGE_SIZE
     page_data = filtered.iloc[start:end]
 
-    # Prepare gallery data
-    gallery_data = []
-    for _, row in page_data.iterrows():
-        img = row["image_url"]
-        title = row["title"]
-        authors = ", ".join(row["authors"])
-        genres = ", ".join(row["genres"][:3])  # Show max 3 genres
-        
-        caption = f"**{title}**\nby {authors}\n*{genres}*"
-        gallery_data.append((img, caption))
-    
-    # Return gallery + next page availability
-    has_next = end < len(filtered)
-    total_results = len(filtered)
-    
-    return gallery_data, has_next, total_results
+    return page_data
 
-def prepare_gallery_data(dataframe):
-    """Convert dataframe to gallery format"""
-    gallery_data = []
-    for _, row in dataframe.iterrows():
-        img = row["image_url"]
-        title = row["title"]
-        authors = ", ".join(row["authors"])
-        genres = ", ".join(row["genres"][:3])
-        
-        caption = f"**{title}**\nby {authors}\n*{genres}*"
-        gallery_data.append((img, caption))
-    return gallery_data
+def create_book_card(img_url, title, authors, genres):
+    """Create HTML card for a book"""
+    genres_text = ", ".join(genres[:3])
+    authors_text = ", ".join(authors)
+    
+    return f"""
+    <div class="book-card">
+        <img src="{img_url}" alt="{title}" onerror="this.src='https://via.placeholder.com/120x180/667eea/white?text=No+Image'">
+        <div class="book-info">
+            <div class="book-title" title="{title}">{title}</div>
+            <div class="book-authors" title="{authors_text}">by {authors_text}</div>
+            <div class="book-genres" title="{genres_text}">{genres_text}</div>
+        </div>
+    </div>
+    """
+
+def create_gallery_html(books_df):
+    """Create horizontal scrollable gallery from dataframe"""
+    if books_df.empty:
+        return "<div class='empty-message'>No books found. Try a different search.</div>"
+    
+    cards_html = ""
+    for _, row in books_df.iterrows():
+        card = create_book_card(
+            row["image_url"],
+            row["title"],
+            row["authors"],
+            row["genres"]
+        )
+        cards_html += card
+    
+    return f"""
+    <div class="horizontal-scroll">
+        <div class="scroll-container">
+            {cards_html}
+        </div>
+    </div>
+    """
 
 # Initial load - show random books and popular books
 def initial_load(query=""):
     # Random books (affected by search)
     random_books = get_random_books(query=query)
-    random_gallery = prepare_gallery_data(random_books)
+    random_html = create_gallery_html(random_books)
     
     # Popular books (UNAFFECTED by search)
-    popular_gallery, has_next, total_results = get_popular_books(page=0)
+    popular_books = get_popular_books(page=0)
+    popular_html = create_gallery_html(popular_books)
+    
+    has_next = len(popular_books) == POPULAR_PAGE_SIZE
     
     if query:
         results_text = f"🎲 Found {len(random_books)} random books for '{query}'"
     else:
         results_text = "🎲 Discover Random Books"
     
-    return random_gallery, popular_gallery, 0, gr.update(visible=has_next), results_text
+    return random_html, popular_html, 0, gr.update(visible=has_next), results_text
 
 # Load more functionality for popular books
-def load_more(page, current_popular_gallery):
+def load_more(page, current_popular_html):
     page += 1
-    gallery_data, has_next, total_results = get_popular_books(page)
-    # Append new results to existing gallery
-    new_gallery = current_popular_gallery + gallery_data
-    return new_gallery, page, gr.update(visible=has_next)
+    popular_books = get_popular_books(page)
+    new_html = create_gallery_html(popular_books)
+    
+    # For simplicity, we'll replace instead of append to avoid complexity
+    has_next = len(popular_books) == POPULAR_PAGE_SIZE
+    
+    return new_html, page, gr.update(visible=has_next)
 
 # Refresh random books (with current search if any)
 def refresh_random(query):
     random_books = get_random_books(query=query)
-    random_gallery = prepare_gallery_data(random_books)
+    random_html = create_gallery_html(random_books)
     
     if query:
         results_text = f"🎲 Found {len(random_books)} random books for '{query}'"
     else:
         results_text = "🎲 Discover Random Books"
     
-    return random_gallery, results_text
+    return random_html, results_text
 
 # Clear search - resets to default view
 def clear_search():
     return "", *initial_load("")
 
-# Build UI with two sections
+# Build UI with custom HTML components for proper horizontal scrolling
 with gr.Blocks(css="""
     .gallery-container {
         border: 1px solid #e0e0e0;
@@ -129,24 +146,71 @@ with gr.Blocks(css="""
         margin: 20px 0;
         background: white;
     }
-    .scroll-horizontal {
-        display: flex;
+    .horizontal-scroll {
+        width: 100%;
         overflow-x: auto;
+        padding: 10px 0;
+    }
+    .scroll-container {
+        display: flex;
         gap: 20px;
-        padding: 15px 5px;
+        padding: 10px 5px;
         min-height: 280px;
     }
-    .scroll-horizontal .thumbnail {
+    .book-card {
         flex: 0 0 auto;
         width: 160px;
-        height: 240px;
-        object-fit: cover;
+        height: 280px;
         border-radius: 8px;
         box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         transition: transform 0.2s ease;
+        background: white;
+        overflow: hidden;
     }
-    .scroll-horizontal .thumbnail:hover {
+    .book-card:hover {
         transform: scale(1.05);
+        box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+    }
+    .book-card img {
+        width: 100%;
+        height: 180px;
+        object-fit: cover;
+        border-bottom: 1px solid #f0f0f0;
+    }
+    .book-info {
+        padding: 12px;
+        height: 100px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+    }
+    .book-title {
+        font-weight: bold;
+        font-size: 12px;
+        line-height: 1.2;
+        margin-bottom: 4px;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+    .book-authors {
+        font-size: 11px;
+        color: #666;
+        margin-bottom: 4px;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+    .book-genres {
+        font-size: 10px;
+        color: #888;
+        font-style: italic;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
     }
     .section-header {
         display: flex;
@@ -185,19 +249,25 @@ with gr.Blocks(css="""
         justify-content: center;
         margin-top: 15px;
     }
+    .empty-message {
+        text-align: center;
+        padding: 40px;
+        color: #666;
+        font-style: italic;
+    }
     /* Custom scrollbar */
-    .scroll-horizontal::-webkit-scrollbar {
+    .horizontal-scroll::-webkit-scrollbar {
         height: 8px;
     }
-    .scroll-horizontal::-webkit-scrollbar-track {
+    .horizontal-scroll::-webkit-scrollbar-track {
         background: #f1f1f1;
         border-radius: 4px;
     }
-    .scroll-horizontal::-webkit-scrollbar-thumb {
+    .horizontal-scroll::-webkit-scrollbar-thumb {
         background: #c1c1c1;
         border-radius: 4px;
     }
-    .scroll-horizontal::-webkit-scrollbar-thumb:hover {
+    .horizontal-scroll::-webkit-scrollbar-thumb:hover {
         background: #a8a8a8;
     }
 """) as demo:
@@ -227,28 +297,14 @@ with gr.Blocks(css="""
                 random_results_info = gr.Markdown("🎲 Discover Random Books", elem_classes="section-title")
                 refresh_btn = gr.Button("🔄 Refresh Random", elem_classes="refresh-btn", size="sm")
             
-            random_gallery = gr.Gallery(
-                label="",
-                show_label=False,
-                elem_classes="scroll-horizontal",
-                columns=100,  # Very large number to force horizontal scroll
-                height=280,
-                object_fit="cover"
-            )
+            random_html = gr.HTML()
         
         # Popular Books Section (UNAFFECTED by search)
         with gr.Column(elem_classes="gallery-container"):
             with gr.Row(elem_classes="section-header"):
                 gr.Markdown("📚 Popular Books", elem_classes="section-title")
             
-            popular_gallery = gr.Gallery(
-                label="",
-                show_label=False,
-                elem_classes="scroll-horizontal",
-                columns=100,
-                height=280,
-                object_fit="cover"
-            )
+            popular_html = gr.HTML()
             
             with gr.Row(elem_classes="load-more-container"):
                 load_more_button = gr.Button("📚 Load More Popular Books", visible=False, variant="primary")
@@ -258,31 +314,31 @@ with gr.Blocks(css="""
     search_box.submit(
         initial_load, 
         inputs=[search_box], 
-        outputs=[random_gallery, popular_gallery, page_state, load_more_button, random_results_info]
+        outputs=[random_html, popular_html, page_state, load_more_button, random_results_info]
     )
     
     load_more_button.click(
         load_more,
-        inputs=[page_state, popular_gallery],
-        outputs=[popular_gallery, page_state, load_more_button]
+        inputs=[page_state, popular_html],
+        outputs=[popular_html, page_state, load_more_button]
     )
     
     clear_btn.click(
         clear_search,
-        outputs=[search_box, random_gallery, popular_gallery, page_state, load_more_button, random_results_info]
+        outputs=[search_box, random_html, popular_html, page_state, load_more_button, random_results_info]
     )
     
     refresh_btn.click(
         refresh_random,
         inputs=[search_box],
-        outputs=[random_gallery, random_results_info]
+        outputs=[random_html, random_results_info]
     )
     
     # Load default books when app starts
     demo.load(
         initial_load,
         inputs=[search_box],
-        outputs=[random_gallery, popular_gallery, page_state, load_more_button, random_results_info]
+        outputs=[random_html, popular_html, page_state, load_more_button, random_results_info]
     )
 
 if __name__ == "__main__":
