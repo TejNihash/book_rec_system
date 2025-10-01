@@ -83,29 +83,19 @@ def create_gallery_html(books_df):
         )
         cards_html += card
     
-    return f"""
-    <div class="horizontal-scroll">
-        <div class="scroll-container">
-            {cards_html}
-        </div>
-    </div>
-    """
-
-def parse_existing_gallery(html_content):
-    """Extract book data from existing HTML gallery to append new books"""
-    # This is a simplified parser - in a real app you might want to store the data differently
-    # For now, we'll rely on state to track the books
-    return html_content
+    return cards_html  # Return just the cards, not the container
 
 # Initial load - show random books and popular books
 def initial_load(query=""):
     # Random books (affected by search)
     random_books = get_random_books(query=query, page=0)
-    random_html = create_gallery_html(random_books)
+    random_cards = create_gallery_html(random_books)
+    random_html = f'<div class="horizontal-scroll"><div class="scroll-container">{random_cards}</div></div>'
     
     # Popular books (UNAFFECTED by search)
     popular_books = get_popular_books(page=0)
-    popular_html = create_gallery_html(popular_books)
+    popular_cards = create_gallery_html(popular_books)
+    popular_html = f'<div class="horizontal-scroll"><div class="scroll-container">{popular_cards}</div></div>'
     
     random_has_next = len(random_books) == RANDOM_PAGE_SIZE and len(random_books) < len(df)
     popular_has_next = len(popular_books) == POPULAR_PAGE_SIZE
@@ -131,9 +121,12 @@ def load_more_random(query, page, current_random_html):
     if random_books.empty:
         return current_random_html, page, gr.update(visible=False)
     
-    new_html = create_gallery_html(random_books)
-    # Append new books to existing HTML
-    combined_html = current_random_html.replace('</div></div>', '') + new_html.replace('<div class="horizontal-scroll"><div class="scroll-container">', '')
+    new_cards = create_gallery_html(random_books)
+    
+    # Append new cards to the existing scroll container
+    # Remove the closing divs from current HTML and append new cards
+    current_html_clean = current_random_html.replace('</div></div>', '')
+    combined_html = current_html_clean + new_cards + '</div></div>'
     
     random_has_next = len(random_books) == RANDOM_PAGE_SIZE
     
@@ -147,9 +140,11 @@ def load_more_popular(page, current_popular_html):
     if popular_books.empty:
         return current_popular_html, page, gr.update(visible=False)
     
-    new_html = create_gallery_html(popular_books)
-    # Append new books to existing HTML
-    combined_html = current_popular_html.replace('</div></div>', '') + new_html.replace('<div class="horizontal-scroll"><div class="scroll-container">', '')
+    new_cards = create_gallery_html(popular_books)
+    
+    # Append new cards to the existing scroll container
+    current_html_clean = current_popular_html.replace('</div></div>', '')
+    combined_html = current_html_clean + new_cards + '</div></div>'
     
     popular_has_next = len(popular_books) == POPULAR_PAGE_SIZE
     
@@ -158,7 +153,8 @@ def load_more_popular(page, current_popular_html):
 # Refresh random books (with current search if any)
 def refresh_random(query):
     random_books = get_random_books(query=query, page=0)
-    random_html = create_gallery_html(random_books)
+    random_cards = create_gallery_html(random_books)
+    random_html = f'<div class="horizontal-scroll"><div class="scroll-container">{random_cards}</div></div>'
     
     random_has_next = len(random_books) == RANDOM_PAGE_SIZE and len(random_books) < len(df)
     
@@ -194,17 +190,19 @@ with gr.Blocks(css="""
         display: flex;
         gap: 20px;
         padding: 10px 5px;
-        min-height: 280px;
+        min-height: 300px; /* Increased to prevent clipping */
     }
     .book-card {
         flex: 0 0 auto;
         width: 160px;
-        height: 280px;
+        height: 290px; /* Increased height to prevent text clipping */
         border-radius: 8px;
         box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         transition: transform 0.2s ease;
         background: white;
         overflow: hidden;
+        display: flex;
+        flex-direction: column;
     }
     .book-card:hover {
         transform: scale(1.05);
@@ -215,13 +213,15 @@ with gr.Blocks(css="""
         height: 180px;
         object-fit: cover;
         border-bottom: 1px solid #f0f0f0;
+        flex-shrink: 0;
     }
     .book-info {
         padding: 12px;
-        height: 100px;
+        flex: 1;
         display: flex;
         flex-direction: column;
         justify-content: space-between;
+        min-height: 110px; /* Ensure enough space for text */
     }
     .book-title {
         font-weight: bold;
@@ -232,7 +232,8 @@ with gr.Blocks(css="""
         -webkit-line-clamp: 2;
         -webkit-box-orient: vertical;
         overflow: hidden;
-        color: #2c3e50; /* Darker color for better visibility */
+        color: #2c3e50;
+        flex-shrink: 0;
     }
     .book-authors {
         font-size: 11px;
@@ -242,6 +243,7 @@ with gr.Blocks(css="""
         -webkit-line-clamp: 2;
         -webkit-box-orient: vertical;
         overflow: hidden;
+        flex-shrink: 0;
     }
     .book-genres {
         font-size: 10px;
@@ -251,6 +253,7 @@ with gr.Blocks(css="""
         -webkit-line-clamp: 2;
         -webkit-box-orient: vertical;
         overflow: hidden;
+        flex-shrink: 0;
     }
     .section-header {
         display: flex;
