@@ -68,7 +68,7 @@ with gr.Blocks() as demo:
     )
 
     gallery = gr.Gallery(
-        label="Books", show_label=False, columns=3, height="auto", scroll=True
+        label="Books", show_label=False, columns=3, height="auto"
     )
     
     load_more_button = gr.Button("Load More", visible=False)
