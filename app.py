@@ -45,9 +45,9 @@ with gr.Blocks(css="""
         label="Popular Books",
         rows=1,
         columns=None,   # auto-fit multiple books
-        show_label=False,
+        show_label=True,
         elem_classes="book-shelf",
-        preview=True
+        preview=False
     )
 
     popular_indices_state = gr.State([])
