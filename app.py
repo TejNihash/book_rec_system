@@ -20,8 +20,17 @@ BOOKS_PER_ROW = 6
 INITIAL_ROWS = 2
 ROWS_PER_LOAD = 1
 
-def get_random_books(query="", page=0):
-    """Get paginated random books, filtered by query if provided"""
+# Store loaded books to maintain state
+loaded_random_books = []
+loaded_popular_books = []
+
+def get_random_books(query="", page=0, reset=False):
+    """Get random books, accumulating previously loaded ones"""
+    global loaded_random_books
+    
+    if reset:
+        loaded_random_books = []
+    
     if query:
         query = query.strip().lower()
         mask_title = df["title_lower"].str.contains(query, na=False)
@@ -31,19 +40,52 @@ def get_random_books(query="", page=0):
         
         if len(filtered) == 0:
             return filtered
-        start = page * BOOKS_PER_ROW * INITIAL_ROWS
-        end = start + (BOOKS_PER_ROW * INITIAL_ROWS)
-        return filtered.iloc[start:end]
+        
+        # For search results, get the next chunk
+        books_needed = (INITIAL_ROWS + page) * BOOKS_PER_ROW
+        available_books = filtered[~filtered.index.isin([b.index for b in loaded_random_books])]
+        
+        if len(available_books) == 0:
+            return loaded_random_books
+        
+        new_books = available_books.head(BOOKS_PER_ROW * ROWS_PER_LOAD)
+        loaded_random_books.extend([row for _, row in new_books.iterrows()])
+        
     else:
-        if len(df) <= BOOKS_PER_ROW * INITIAL_ROWS:
-            return df
-        return df.sample(n=BOOKS_PER_ROW * INITIAL_ROWS)
+        # For random, get fresh random sample but keep previous ones
+        books_needed = (INITIAL_ROWS + page) * BOOKS_PER_ROW
+        if len(loaded_random_books) >= books_needed:
+            return loaded_random_books[:books_needed]
+        
+        # Get new random books that aren't already loaded
+        available_books = df[~df.index.isin([b.index for b in loaded_random_books])]
+        if len(available_books) == 0:
+            return loaded_random_books
+        
+        new_books_count = min(BOOKS_PER_ROW * ROWS_PER_LOAD, len(available_books))
+        new_books = available_books.sample(n=new_books_count)
+        loaded_random_books.extend([row for _, row in new_books.iterrows()])
+    
+    return loaded_random_books
 
-def get_popular_books(page=0):
-    """Get paginated popular books (unaffected by search)"""
-    start = page * BOOKS_PER_ROW * INITIAL_ROWS
-    end = start + (BOOKS_PER_ROW * INITIAL_ROWS)
-    return df.iloc[start:end]
+def get_popular_books(page=0, reset=False):
+    """Get popular books, accumulating previously loaded ones"""
+    global loaded_popular_books
+    
+    if reset:
+        loaded_popular_books = []
+    
+    books_needed = (INITIAL_ROWS + page) * BOOKS_PER_ROW
+    if len(loaded_popular_books) >= books_needed:
+        return loaded_popular_books[:books_needed]
+    
+    # Get the next chunk of popular books
+    start_idx = len(loaded_popular_books)
+    end_idx = start_idx + (BOOKS_PER_ROW * ROWS_PER_LOAD)
+    new_books = df.iloc[start_idx:end_idx]
+    
+    loaded_popular_books.extend([row for _, row in new_books.iterrows()])
+    return loaded_popular_books
 
 def create_book_card(img_url, title, authors, genres):
     """Create HTML card for a book with proper sizing"""
@@ -61,25 +103,22 @@ def create_book_card(img_url, title, authors, genres):
     </div>
     """
 
-def create_books_container(books_df, section_type, load_more_count=0):
+def create_books_container(books_list, section_type):
     """Create the books container with proper layout"""
-    if books_df.empty:
+    if not books_list:
         return f"""
         <div class="books-container" id="{section_type}-container">
             <div class="empty-message">No books found. Try a different search.</div>
         </div>
         """
     
-    total_books_to_show = (INITIAL_ROWS + load_more_count) * BOOKS_PER_ROW
-    books_to_display = books_df.head(total_books_to_show)
-    
     books_html = ""
-    for _, row in books_to_display.iterrows():
+    for book in books_list:
         card = create_book_card(
-            row["image_url"],
-            row["title"],
-            row["authors"],
-            row["genres"]
+            book["image_url"],
+            book["title"],
+            book["authors"],
+            book["genres"]
         )
         books_html += card
     
@@ -93,23 +132,22 @@ def create_books_container(books_df, section_type, load_more_count=0):
 
 # Initial load
 def initial_load(query=""):
-    # Random books (affected by search)
-    random_books = get_random_books(query=query, page=0)
-    random_html = create_books_container(random_books, "random", 0)
+    # Reset and load initial books
+    random_books = get_random_books(query=query, page=0, reset=True)
+    random_html = create_books_container(random_books, "random")
     
-    # Popular books (UNAFFECTED by search)
-    popular_books = get_popular_books(page=0)
-    popular_html = create_books_container(popular_books, "popular", 0)
+    popular_books = get_popular_books(page=0, reset=True)
+    popular_html = create_books_container(popular_books, "popular")
     
     # Check if more books are available
-    random_has_more = len(random_books) == BOOKS_PER_ROW * INITIAL_ROWS
-    popular_has_more = len(popular_books) == BOOKS_PER_ROW * INITIAL_ROWS
+    random_has_more = len(random_books) == (INITIAL_ROWS * BOOKS_PER_ROW) and len(random_books) < len(df)
+    popular_has_more = len(popular_books) == (INITIAL_ROWS * BOOKS_PER_ROW) and len(popular_books) < len(df)
     
     if query:
         total_random = len(df[df["title_lower"].str.contains(query, na=False) | 
                              df["authors_lower"].apply(lambda lst: any(query in a for a in lst)) |
                              df["genres_lower"].apply(lambda lst: any(query in g for g in lst))])
-        results_text = f"🎲 Found {total_random} books for '{query}'"
+        results_text = f"🎲 Found {total_random} books for '{query}' • Showing {len(random_books)}"
     else:
         results_text = "🎲 Discover Random Books"
     
@@ -121,34 +159,34 @@ def initial_load(query=""):
 # Load more functionality
 def load_more_random(query, load_more_count, current_random_html):
     load_more_count += 1
-    random_books = get_random_books(query=query, page=load_more_count)
-    random_html = create_books_container(random_books, "random", load_more_count)
+    random_books = get_random_books(query=query, page=load_more_count, reset=False)
+    random_html = create_books_container(random_books, "random")
     
-    random_has_more = len(random_books) == BOOKS_PER_ROW * INITIAL_ROWS
+    random_has_more = len(random_books) < len(df) and len(random_books) % (BOOKS_PER_ROW * ROWS_PER_LOAD) == 0
     
     return random_html, load_more_count, gr.update(visible=random_has_more)
 
 def load_more_popular(load_more_count, current_popular_html):
     load_more_count += 1
-    popular_books = get_popular_books(page=load_more_count)
-    popular_html = create_books_container(popular_books, "popular", load_more_count)
+    popular_books = get_popular_books(page=load_more_count, reset=False)
+    popular_html = create_books_container(popular_books, "popular")
     
-    popular_has_more = len(popular_books) == BOOKS_PER_ROW * INITIAL_ROWS
+    popular_has_more = len(popular_books) < len(df) and len(popular_books) % (BOOKS_PER_ROW * ROWS_PER_LOAD) == 0
     
     return popular_html, load_more_count, gr.update(visible=popular_has_more)
 
-# Refresh random books
+# Refresh random books - resets and gets new random books
 def refresh_random(query):
-    random_books = get_random_books(query=query, page=0)
-    random_html = create_books_container(random_books, "random", 0)
+    random_books = get_random_books(query=query, page=0, reset=True)
+    random_html = create_books_container(random_books, "random")
     
-    random_has_more = len(random_books) == BOOKS_PER_ROW * INITIAL_ROWS
+    random_has_more = len(random_books) == (INITIAL_ROWS * BOOKS_PER_ROW) and len(random_books) < len(df)
     
     if query:
         total_random = len(df[df["title_lower"].str.contains(query, na=False) | 
                              df["authors_lower"].apply(lambda lst: any(query in a for a in lst)) |
                              df["genres_lower"].apply(lambda lst: any(query in g for g in lst))])
-        results_text = f"🎲 Found {total_random} books for '{query}'"
+        results_text = f"🎲 Found {total_random} books for '{query}' • Showing {len(random_books)}"
     else:
         results_text = "🎲 Discover Random Books"
     
@@ -158,7 +196,7 @@ def refresh_random(query):
 def clear_search():
     return "", *initial_load("")
 
-# Build the proper UI
+# Build the proper UI (same CSS as before)
 with gr.Blocks(css="""
     .gallery-container {
         border: 1px solid #e0e0e0;
@@ -168,7 +206,7 @@ with gr.Blocks(css="""
         background: white;
     }
     .books-container {
-        max-height: 500px; /* Fixed height, becomes scrollable when content exceeds */
+        max-height: 500px;
         overflow-y: auto;
         padding: 15px;
         background: #fafafa;
@@ -188,7 +226,7 @@ with gr.Blocks(css="""
         overflow: hidden;
         display: flex;
         flex-direction: column;
-        height: 280px; /* Proper book card size */
+        height: 280px;
     }
     .book-card:hover {
         transform: translateY(-2px);
@@ -279,7 +317,6 @@ with gr.Blocks(css="""
         color: #666;
         font-style: italic;
     }
-    /* Custom scrollbar */
     .books-container::-webkit-scrollbar {
         width: 6px;
     }
