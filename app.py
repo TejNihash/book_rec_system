@@ -2,7 +2,6 @@ import ast
 import pandas as pd
 import gradio as gr
 import random
-import time
 
 # Load dataset
 df = pd.read_csv("data_mini_books.csv")  # columns: title, authors, genres, image_url
@@ -15,13 +14,6 @@ df["genres"] = df["genres"].apply(lambda x: ast.literal_eval(x) if isinstance(x,
 df["title_lower"] = df["title"].str.lower()
 df["authors_lower"] = df["authors"].apply(lambda lst: [a.lower() for a in lst])
 df["genres_lower"] = df["genres"].apply(lambda lst: [g.lower() for g in lst])
-
-# Get popular genres for chips
-all_genres = []
-for genres_list in df["genres"]:
-    all_genres.extend(genres_list)
-genre_counts = pd.Series(all_genres).value_counts()
-POPULAR_GENRES = genre_counts.head(10).index.tolist()
 
 # Pagination settings
 POPULAR_PAGE_SIZE = 20
@@ -69,12 +61,17 @@ def create_book_card(img_url, title, authors, genres):
     </div>
     """
 
-def create_gallery_html(books_df, container_id):
-    """Create horizontal scrollable gallery from dataframe with unique ID"""
+def create_gallery_html(books_df, section_type):
+    """Create horizontal scrollable gallery from dataframe"""
     if books_df.empty:
         return f"""
-        <div class="horizontal-scroll" id="{container_id}">
-            <div class="empty-message">No books found. Try a different search.</div>
+        <div class="gallery-wrapper" id="{section_type}-gallery">
+            <div class="horizontal-scroll">
+                <div class="scroll-container">
+                    <div class="empty-message">No books found. Try a different search.</div>
+                </div>
+            </div>
+            <div class="load-more-right" id="{section_type}-load-more"></div>
         </div>
         """
     
@@ -89,31 +86,27 @@ def create_gallery_html(books_df, container_id):
         cards_html += card
     
     return f"""
-    <div class="horizontal-scroll" id="{container_id}">
-        <div class="scroll-container">
-            {cards_html}
+    <div class="gallery-wrapper" id="{section_type}-gallery">
+        <div class="horizontal-scroll">
+            <div class="scroll-container">
+                {cards_html}
+            </div>
         </div>
+        <div class="load-more-right" id="{section_type}-load-more"></div>
     </div>
     """
-
-def create_genre_chips():
-    """Create HTML for genre filter chips"""
-    chips_html = ""
-    for genre in POPULAR_GENRES:
-        chips_html += f'<button class="genre-chip" onclick="filterByGenre(\'{genre}\')">{genre}</button>'
-    return f'<div class="genre-chips">{chips_html}</div>'
 
 # Initial load - show random books and popular books
 def initial_load(query=""):
     # Random books (affected by search)
     random_books = get_random_books(query=query, page=0)
-    random_html = create_gallery_html(random_books, "random-books-container")
+    random_html = create_gallery_html(random_books, "random")
     
     # Popular books (UNAFFECTED by search)
     popular_books = get_popular_books(page=0)
-    popular_html = create_gallery_html(popular_books, "popular-books-container")
+    popular_html = create_gallery_html(popular_books, "popular")
     
-    random_has_next = len(random_books) == RANDOM_PAGE_SIZE and len(random_books) < len(df)
+    random_has_next = len(random_books) == RANDOM_PAGE_SIZE
     popular_has_next = len(popular_books) == POPULAR_PAGE_SIZE
     
     if query:
@@ -124,69 +117,73 @@ def initial_load(query=""):
     else:
         results_text = "🎲 Discover Random Books"
     
-    genre_chips = create_genre_chips()
-    
     return (random_html, popular_html, 0, 0, 
             gr.update(visible=random_has_next), 
             gr.update(visible=popular_has_next), 
-            results_text, genre_chips)
+            results_text)
 
 # Load more functionality for random books
 def load_more_random(query, page, current_random_html):
-    # Save scroll position before loading
-    save_scroll_js = "saveScrollPosition('random-books-container')"
-    
-    # Show loading state
-    time.sleep(0.3)  # Simulate loading
-    
     page += 1
     random_books = get_random_books(query=query, page=page)
     
     if random_books.empty:
-        return current_random_html, page, gr.update(visible=False), gr.update()
+        return current_random_html, page, gr.update(visible=False)
     
-    new_cards = create_gallery_html(random_books, "random-books-container").replace('<div class="horizontal-scroll" id="random-books-container">', '').replace('</div>', '')
+    # Extract just the new cards HTML
+    new_cards_html = ""
+    for _, row in random_books.iterrows():
+        card = create_book_card(
+            row["image_url"],
+            row["title"],
+            row["authors"],
+            row["genres"]
+        )
+        new_cards_html += card
     
-    current_html_clean = current_random_html.replace('</div>', '')
-    combined_html = current_html_clean + new_cards + '</div>'
+    # Insert new cards before the load-more-right div
+    updated_html = current_random_html.replace(
+        '<div class="load-more-right" id="random-load-more"></div>',
+        new_cards_html + '<div class="load-more-right" id="random-load-more"></div>'
+    )
     
     random_has_next = len(random_books) == RANDOM_PAGE_SIZE
     
-    # Restore scroll position after update
-    restore_scroll_js = "setTimeout(() => restoreScrollPosition('random-books-container'), 200)"
-    
-    return combined_html, page, gr.update(visible=random_has_next), gr.update()
+    return updated_html, page, gr.update(visible=random_has_next)
 
 # Load more functionality for popular books
 def load_more_popular(page, current_popular_html):
-    # Save scroll position before loading
-    save_scroll_js = "saveScrollPosition('popular-books-container')"
-    
-    # Show loading state
-    time.sleep(0.3)  # Simulate loading
-    
     page += 1
     popular_books = get_popular_books(page=page)
     
     if popular_books.empty:
-        return current_popular_html, page, gr.update(visible=False), gr.update()
+        return current_popular_html, page, gr.update(visible=False)
     
-    new_cards = create_gallery_html(popular_books, "popular-books-container").replace('<div class="horizontal-scroll" id="popular-books-container">', '').replace('</div>', '')
+    # Extract just the new cards HTML
+    new_cards_html = ""
+    for _, row in popular_books.iterrows():
+        card = create_book_card(
+            row["image_url"],
+            row["title"],
+            row["authors"],
+            row["genres"]
+        )
+        new_cards_html += card
     
-    current_html_clean = current_popular_html.replace('</div>', '')
-    combined_html = current_html_clean + new_cards + '</div>'
+    # Insert new cards before the load-more-right div
+    updated_html = current_popular_html.replace(
+        '<div class="load-more-right" id="popular-load-more"></div>',
+        new_cards_html + '<div class="load-more-right" id="popular-load-more"></div>'
+    )
     
     popular_has_next = len(popular_books) == POPULAR_PAGE_SIZE
     
-    # Restore scroll position after update
-    restore_scroll_js = "setTimeout(() => restoreScrollPosition('popular-books-container'), 200)"
-    
-    return combined_html, page, gr.update(visible=popular_has_next), gr.update()
+    return updated_html, page, gr.update(visible=popular_has_next)
 
 # Refresh random books
 def refresh_random(query):
     random_books = get_random_books(query=query, page=0)
-    random_html = create_gallery_html(random_books, "random-books-container")
+    random_html = create_gallery_html(random_books, "random")
     
     random_has_next = len(random_books) == RANDOM_PAGE_SIZE and len(random_books) < len(df)
     
@@ -200,15 +197,11 @@ def refresh_random(query):
     
     return random_html, 0, gr.update(visible=random_has_next), results_text
 
-# Filter by genre
-def filter_by_genre(genre):
-    return genre, *initial_load(genre)
-
 # Clear search
 def clear_search():
     return "", *initial_load("")
 
-# Build UI with all improvements
+# Build UI with fixed scrolling and right-side load more buttons
 with gr.Blocks(css="""
     .gallery-container {
         border: 1px solid #e0e0e0;
@@ -216,6 +209,11 @@ with gr.Blocks(css="""
         padding: 20px;
         margin: 20px 0;
         background: white;
+        position: relative;
+    }
+    .gallery-wrapper {
+        position: relative;
+        width: 100%;
     }
     .horizontal-scroll {
         width: 100%;
@@ -291,28 +289,6 @@ with gr.Blocks(css="""
         overflow: hidden;
         flex-shrink: 0;
     }
-    .genre-chips {
-        display: flex;
-        gap: 8px;
-        flex-wrap: wrap;
-        margin: 15px 0;
-        padding: 0 10px;
-    }
-    .genre-chip {
-        background: #f1f3f4;
-        border: 1px solid #dadce0;
-        border-radius: 16px;
-        padding: 6px 12px;
-        font-size: 12px;
-        color: #3c4043;
-        cursor: pointer;
-        transition: all 0.2s ease;
-    }
-    .genre-chip:hover {
-        background: #e8f0fe;
-        border-color: #1a73e8;
-        color: #1a73e8;
-    }
     .section-header {
         display: flex;
         justify-content: space-between;
@@ -345,6 +321,13 @@ with gr.Blocks(css="""
         color: white;
         border: none;
     }
+    .load-more-right {
+        position: absolute;
+        right: 10px;
+        top: 50%;
+        transform: translateY(-50%);
+        z-index: 10;
+    }
     .load-more-container {
         display: flex;
         justify-content: center;
@@ -356,10 +339,6 @@ with gr.Blocks(css="""
         padding: 40px;
         color: #666;
         font-style: italic;
-    }
-    .loading {
-        opacity: 0.7;
-        pointer-events: none;
     }
     .horizontal-scroll::-webkit-scrollbar {
         height: 8px;
@@ -377,36 +356,57 @@ with gr.Blocks(css="""
     }
     
     <script>
-    function saveScrollPosition(containerId) {
-        const container = document.getElementById(containerId);
-        if (container) {
-            localStorage.setItem(containerId + '_scroll', container.scrollLeft);
+    // Simple scroll preservation - store position before update
+    let currentScrollPositions = {};
+    
+    function saveScrollPosition(section) {
+        const scrollContainer = document.querySelector(`#${section}-gallery .horizontal-scroll`);
+        if (scrollContainer) {
+            currentScrollPositions[section] = scrollContainer.scrollLeft;
         }
     }
     
-    function restoreScrollPosition(containerId) {
-        const container = document.getElementById(containerId);
-        if (container) {
-            const saved = localStorage.getItem(containerId + '_scroll');
-            if (saved) {
-                setTimeout(() => {
-                    container.scrollLeft = parseInt(saved);
-                }, 100);
+    function restoreScrollPosition(section) {
+        const scrollContainer = document.querySelector(`#${section}-gallery .horizontal-scroll`);
+        if (scrollContainer && currentScrollPositions[section] !== undefined) {
+            setTimeout(() => {
+                scrollContainer.scrollLeft = currentScrollPositions[section];
+            }, 50);
+        }
+    }
+    
+    // Save scroll position before any update
+    document.addEventListener('DOMContentLoaded', function() {
+        // Save scroll when about to load more
+        document.addEventListener('click', function(e) {
+            if (e.target.classList.contains('load-more-btn')) {
+                const section = e.target.getAttribute('data-section');
+                saveScrollPosition(section);
             }
-        }
-    }
-    
-    function filterByGenre(genre) {
-        // This will be connected to Gradio backend
-        const searchBox = document.querySelector('input[type="text"]');
-        if (searchBox) {
-            searchBox.value = genre;
-            searchBox.dispatchEvent(new Event('input', { bubbles: true }));
-            // Trigger search
-            const event = new Event('submit', { bubbles: true });
-            searchBox.closest('form').dispatchEvent(event);
-        }
-    }
+        });
+        
+        // Restore scroll after Gradio updates
+        const observer = new MutationObserver(function(mutations) {
+            mutations.forEach(function(mutation) {
+                if (mutation.type === 'childList') {
+                    // Check if this is a gallery update
+                    mutation.addedNodes.forEach(function(node) {
+                        if (node.nodeType === 1 && node.classList && 
+                            (node.classList.contains('gallery-wrapper') || 
+                             node.querySelector('.gallery-wrapper'))) {
+                            const section = node.id ? node.id.replace('-gallery', '') : 
+                                        node.querySelector('[id$="-gallery"]')?.id.replace('-gallery', '');
+                            if (section) {
+                                setTimeout(() => restoreScrollPosition(section), 100);
+                            }
+                        }
+                    });
+                }
+            });
+        });
+        
+        observer.observe(document.body, { childList: true, subtree: true });
+    });
     </script>
 """) as demo:
     
@@ -427,9 +427,6 @@ with gr.Blocks(css="""
             )
             clear_btn = gr.Button("Clear Search", scale=1, variant="secondary")
         
-        # Genre Chips
-        genre_chips_html = gr.HTML()
-        
         # Random Books Section
         with gr.Column(elem_classes="gallery-container"):
             with gr.Row(elem_classes="section-header"):
@@ -438,8 +435,14 @@ with gr.Blocks(css="""
             
             random_html = gr.HTML()
             
-            with gr.Row(elem_classes="load-more-container"):
-                load_more_random_btn = gr.Button("📚 Load More Random Books", visible=False, variant="primary")
+            # Load More button will be positioned via CSS on the right
+            with gr.Row():
+                load_more_random_btn = gr.Button(
+                    "➡️ Load More", 
+                    visible=False, 
+                    variant="primary",
+                    elem_classes="load-more-btn"
+                )
                 random_page_state = gr.State(0)
         
         # Popular Books Section
@@ -449,8 +452,14 @@ with gr.Blocks(css="""
             
             popular_html = gr.HTML()
             
-            with gr.Row(elem_classes="load-more-container"):
-                load_more_popular_btn = gr.Button("📚 Load More Popular Books", visible=False, variant="primary")
+            # Load More button will be positioned via CSS on the right
+            with gr.Row():
+                load_more_popular_btn = gr.Button(
+                    "➡️ Load More", 
+                    visible=False, 
+                    variant="primary",
+                    elem_classes="load-more-btn" 
+                )
                 popular_page_state = gr.State(0)
     
     # Event handlers
@@ -458,25 +467,25 @@ with gr.Blocks(css="""
         initial_load, 
         inputs=[search_box], 
         outputs=[random_html, popular_html, random_page_state, popular_page_state, 
-                load_more_random_btn, load_more_popular_btn, random_results_info, genre_chips_html]
+                load_more_random_btn, load_more_popular_btn, random_results_info]
     )
     
     load_more_random_btn.click(
         load_more_random,
         inputs=[search_box, random_page_state, random_html],
-        outputs=[random_html, random_page_state, load_more_random_btn, gr.Textbox(visible=False)]  # Dummy output for JS
+        outputs=[random_html, random_page_state, load_more_random_btn]
     )
     
     load_more_popular_btn.click(
         load_more_popular,
         inputs=[popular_page_state, popular_html],
-        outputs=[popular_html, popular_page_state, load_more_popular_btn, gr.Textbox(visible=False)]
+        outputs=[popular_html, popular_page_state, load_more_popular_btn]
     )
     
     clear_btn.click(
         clear_search,
         outputs=[search_box, random_html, popular_html, random_page_state, popular_page_state, 
-                load_more_random_btn, load_more_popular_btn, random_results_info, genre_chips_html]
+                load_more_random_btn, load_more_popular_btn, random_results_info]
     )
     
     refresh_btn.click(
@@ -490,7 +499,7 @@ with gr.Blocks(css="""
         initial_load,
         inputs=[search_box],
         outputs=[random_html, popular_html, random_page_state, popular_page_state, 
-                load_more_random_btn, load_more_popular_btn, random_results_info, genre_chips_html]
+                load_more_random_btn, load_more_popular_btn, random_results_info]
     )
 
 if __name__ == "__main__":
