@@ -28,23 +28,25 @@ def search_books(query, page=0):
         mask_genres = df["genres_lower"].apply(lambda lst: any(query in g for g in lst))
         filtered = df[mask_title | mask_authors | mask_genres]
     else:
-        filtered = df
+        # For random books when no query, shuffle for variety
+        filtered = df.copy().sample(frac=1).reset_index(drop=True)
     
     # Pagination
     start_idx = page * BOOKS_PER_LOAD
     end_idx = start_idx + BOOKS_PER_LOAD
     page_books = filtered.iloc[start_idx:end_idx]
     
-    has_more = len(page_books) == BOOKS_PER_LOAD and end_idx < len(filtered)
+    has_more = len(filtered) > end_idx
     return page_books, has_more
 
 def get_popular_books(page=0):
     """Get popular books with pagination"""
+    # For demo, just use the dataframe as-is. You can replace with actual popularity logic
     start_idx = page * BOOKS_PER_LOAD
     end_idx = start_idx + BOOKS_PER_LOAD
     page_books = df.iloc[start_idx:end_idx]
     
-    has_more = len(page_books) == BOOKS_PER_LOAD and end_idx < len(df)
+    has_more = len(df) > end_idx
     return page_books, has_more
 
 def create_book_card(img_url, title, authors, genres):
@@ -72,8 +74,12 @@ def create_books_display(books_df):
     
     return f'<div class="books-grid">{books_html}</div>'
 
-# Initial state
+# State management for loaded books
+random_loaded_books = gr.State(pd.DataFrame())
+popular_loaded_books = gr.State(pd.DataFrame())
+
 def initial_state(query=""):
+    """Initialize or reset the application state"""
     # Random books (searchable)
     random_books, random_has_more = search_books(query, 0)
     random_display = create_books_display(random_books)
@@ -90,39 +96,46 @@ def initial_state(query=""):
     
     return (
         random_display, popular_display, 
-        0, 0,  # page states
+        1, 1,  # page states (next page to load)
         gr.update(visible=random_has_more), 
         gr.update(visible=popular_has_more),
-        results_text
+        results_text,
+        random_books,  # Store loaded books in state
+        popular_books
     )
 
-# Load more functions
-def load_more_random(query, current_page, current_display):
-    new_page = current_page + 1
-    random_books, has_more = search_books(query, new_page)
-    new_display = create_books_display(random_books)
+def load_more_random(query, current_page, current_books_df):
+    """Load more books for random/search section"""
+    new_books, has_more = search_books(query, current_page)
     
-    # Combine displays
-    combined_display = current_display.replace('</div>', '') + new_display.replace('<div class="books-grid">', '') + '</div>'
-    
-    return combined_display, new_page, gr.update(visible=has_more)
+    if not new_books.empty:
+        # Combine with existing books
+        combined_books = pd.concat([current_books_df, new_books], ignore_index=True)
+        combined_display = create_books_display(combined_books)
+        return combined_display, current_page + 1, gr.update(visible=has_more), combined_books
+    else:
+        return create_books_display(current_books_df), current_page, gr.update(visible=False), current_books_df
 
-def load_more_popular(current_page, current_display):
-    new_page = current_page + 1
-    popular_books, has_more = get_popular_books(new_page)
-    new_display = create_books_display(popular_books)
+def load_more_popular(current_page, current_books_df):
+    """Load more books for popular section"""
+    new_books, has_more = get_popular_books(current_page)
     
-    # Combine displays
-    combined_display = current_display.replace('</div>', '') + new_display.replace('<div class="books-grid">', '') + '</div>'
-    
-    return combined_display, new_page, gr.update(visible=has_more)
+    if not new_books.empty:
+        # Combine with existing books
+        combined_books = pd.concat([current_books_df, new_books], ignore_index=True)
+        combined_display = create_books_display(combined_books)
+        return combined_display, current_page + 1, gr.update(visible=has_more), combined_books
+    else:
+        return create_books_display(current_books_df), current_page, gr.update(visible=False), current_books_df
 
-# Refresh random
 def refresh_random(query):
-    return load_more_random(query, -1, "")  # -1 so it becomes page 0
+    """Refresh random books section"""
+    random_books, random_has_more = search_books(query, 0)
+    random_display = create_books_display(random_books)
+    return random_display, 1, gr.update(visible=random_has_more), random_books
 
-# Clear search
 def clear_search():
+    """Clear search and reset to initial state"""
     return "", *initial_state("")
 
 # Build the interface
@@ -133,6 +146,7 @@ with gr.Blocks(css="""
         padding: 20px;
         margin: 20px 0;
         background: white;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     }
     .books-container {
         max-height: 500px;
@@ -145,7 +159,7 @@ with gr.Blocks(css="""
     }
     .books-grid {
         display: grid;
-        grid-template-columns: repeat(6, 1fr);
+        grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
         gap: 15px;
     }
     .book-card {
@@ -154,9 +168,10 @@ with gr.Blocks(css="""
         padding: 12px;
         box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         text-align: center;
-        height: 260px;
+        height: 280px;
         display: flex;
         flex-direction: column;
+        transition: all 0.3s ease;
     }
     .book-card:hover {
         transform: translateY(-2px);
@@ -164,7 +179,7 @@ with gr.Blocks(css="""
     }
     .book-card img {
         width: 100%;
-        height: 150px;
+        height: 160px;
         object-fit: cover;
         border-radius: 4px;
         margin-bottom: 8px;
@@ -210,6 +225,11 @@ with gr.Blocks(css="""
         align-items: center;
         margin-bottom: 15px;
     }
+    .section-title {
+        font-size: 18px;
+        font-weight: bold;
+        color: #2c3e50;
+    }
     .load-more-btn {
         display: flex;
         justify-content: center;
@@ -222,20 +242,27 @@ with gr.Blocks(css="""
         font-style: italic;
     }
     .books-container::-webkit-scrollbar {
-        width: 6px;
+        width: 8px;
     }
     .books-container::-webkit-scrollbar-track {
         background: #f1f1f1;
+        border-radius: 4px;
     }
     .books-container::-webkit-scrollbar-thumb {
         background: #c1c1c1;
-        border-radius: 3px;
+        border-radius: 4px;
+    }
+    .books-container::-webkit-scrollbar-thumb:hover {
+        background: #a8a8a8;
+    }
+    .search-row {
+        margin-bottom: 20px;
     }
 """) as demo:
 
     gr.Markdown("# 📚 Book Explorer")
     
-    with gr.Row():
+    with gr.Row(elem_classes="search-row"):
         search_box = gr.Textbox(
             label="",
             placeholder="🔍 Search books by title, author, or genre...",
@@ -253,7 +280,8 @@ with gr.Blocks(css="""
         
         with gr.Row(elem_classes="load-more-btn"):
             load_random_btn = gr.Button("📚 Load More Books", visible=True)
-            random_page = gr.State(0)
+            random_page = gr.State(1)  # Start from page 1 since page 0 is loaded initially
+            random_loaded_books = gr.State(pd.DataFrame())
     
     # Popular Books Section  
     with gr.Column(elem_classes="container"):
@@ -264,43 +292,44 @@ with gr.Blocks(css="""
         
         with gr.Row(elem_classes="load-more-btn"):
             load_popular_btn = gr.Button("📚 Load More Books", visible=True)
-            popular_page = gr.State(0)
+            popular_page = gr.State(1)
+            popular_loaded_books = gr.State(pd.DataFrame())
 
     # Event handlers
     search_box.submit(
         initial_state,
         [search_box],
-        [random_display, popular_display, random_page, popular_page, load_random_btn, load_popular_btn, random_title]
+        [random_display, popular_display, random_page, popular_page, load_random_btn, load_popular_btn, random_title, random_loaded_books, popular_loaded_books]
     )
     
     load_random_btn.click(
         load_more_random,
-        [search_box, random_page, random_display],
-        [random_display, random_page, load_random_btn]
+        [search_box, random_page, random_loaded_books],
+        [random_display, random_page, load_random_btn, random_loaded_books]
     )
     
     load_popular_btn.click(
         load_more_popular,
-        [popular_page, popular_display],
-        [popular_display, popular_page, load_popular_btn]
+        [popular_page, popular_loaded_books],
+        [popular_display, popular_page, load_popular_btn, popular_loaded_books]
     )
     
     refresh_btn.click(
         refresh_random,
         [search_box],
-        [random_display, random_page, load_random_btn]
+        [random_display, random_page, load_random_btn, random_loaded_books]
     )
     
     clear_btn.click(
         clear_search,
         [],
-        [search_box, random_display, popular_display, random_page, popular_page, load_random_btn, load_popular_btn, random_title]
+        [search_box, random_display, popular_display, random_page, popular_page, load_random_btn, load_popular_btn, random_title, random_loaded_books, popular_loaded_books]
     )
 
     demo.load(
         initial_state,
         [search_box],
-        [random_display, popular_display, random_page, popular_page, load_random_btn, load_popular_btn, random_title]
+        [random_display, popular_display, random_page, popular_page, load_random_btn, load_popular_btn, random_title, random_loaded_books, popular_loaded_books]
     )
 
 demo.launch()
