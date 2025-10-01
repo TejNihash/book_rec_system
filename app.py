@@ -17,10 +17,10 @@ df["genres_lower"] = df["genres"].apply(lambda lst: [g.lower() for g in lst])
 
 # Pagination settings
 POPULAR_PAGE_SIZE = 20
-RANDOM_SAMPLE_SIZE = 12  # Number of random books to show
+RANDOM_PAGE_SIZE = 12  # Initial random books, then load more in chunks
 
-def get_random_books(n=RANDOM_SAMPLE_SIZE, query=""):
-    """Get random sample of books, filtered by query if provided"""
+def get_random_books(query="", page=0, page_size=RANDOM_PAGE_SIZE):
+    """Get paginated random books, filtered by query if provided"""
     if query:
         query = query.strip().lower()
         mask_title = df["title_lower"].str.contains(query, na=False)
@@ -30,27 +30,27 @@ def get_random_books(n=RANDOM_SAMPLE_SIZE, query=""):
         
         if len(filtered) == 0:
             return filtered
-        elif len(filtered) <= n:
-            return filtered
-        else:
-            return filtered.sample(n=n)
+        # For searched results, we want consistent ordering (not truly random)
+        # So we'll just paginate through the filtered results
+        start = page * page_size
+        end = start + page_size
+        return filtered.iloc[start:end]
     else:
         # No query - return true random sample
-        if len(df) <= n:
+        if len(df) <= page_size:
             return df
-        return df.sample(n=n)
+        # For true random, we sample fresh each time to get different books
+        return df.sample(n=min(page_size, len(df)))
 
-def get_popular_books(page=0):
+def get_popular_books(page=0, page_size=POPULAR_PAGE_SIZE):
     """Get paginated popular books (unaffected by search)"""
     # Show popular books (first N books)
     filtered = df
     
     # Pagination
-    start = page * POPULAR_PAGE_SIZE
-    end = start + POPULAR_PAGE_SIZE
-    page_data = filtered.iloc[start:end]
-
-    return page_data
+    start = page * page_size
+    end = start + page_size
+    return filtered.iloc[start:end]
 
 def create_book_card(img_url, title, authors, genres):
     """Create HTML card for a book"""
@@ -91,47 +91,86 @@ def create_gallery_html(books_df):
     </div>
     """
 
+def parse_existing_gallery(html_content):
+    """Extract book data from existing HTML gallery to append new books"""
+    # This is a simplified parser - in a real app you might want to store the data differently
+    # For now, we'll rely on state to track the books
+    return html_content
+
 # Initial load - show random books and popular books
 def initial_load(query=""):
     # Random books (affected by search)
-    random_books = get_random_books(query=query)
+    random_books = get_random_books(query=query, page=0)
     random_html = create_gallery_html(random_books)
     
     # Popular books (UNAFFECTED by search)
     popular_books = get_popular_books(page=0)
     popular_html = create_gallery_html(popular_books)
     
-    has_next = len(popular_books) == POPULAR_PAGE_SIZE
+    random_has_next = len(random_books) == RANDOM_PAGE_SIZE and len(random_books) < len(df)
+    popular_has_next = len(popular_books) == POPULAR_PAGE_SIZE
     
     if query:
-        results_text = f"🎲 Found {len(random_books)} random books for '{query}'"
+        total_random = len(df[df["title_lower"].str.contains(query, na=False) | 
+                             df["authors_lower"].apply(lambda lst: any(query in a for a in lst)) |
+                             df["genres_lower"].apply(lambda lst: any(query in g for g in lst))])
+        results_text = f"🎲 Found {total_random} books for '{query}' • Showing {len(random_books)}"
     else:
         results_text = "🎲 Discover Random Books"
     
-    return random_html, popular_html, 0, gr.update(visible=has_next), results_text
+    return (random_html, popular_html, 0, 0, 
+            gr.update(visible=random_has_next), 
+            gr.update(visible=popular_has_next), 
+            results_text)
+
+# Load more functionality for random books
+def load_more_random(query, page, current_random_html):
+    page += 1
+    random_books = get_random_books(query=query, page=page)
+    
+    if random_books.empty:
+        return current_random_html, page, gr.update(visible=False)
+    
+    new_html = create_gallery_html(random_books)
+    # Append new books to existing HTML
+    combined_html = current_random_html.replace('</div></div>', '') + new_html.replace('<div class="horizontal-scroll"><div class="scroll-container">', '')
+    
+    random_has_next = len(random_books) == RANDOM_PAGE_SIZE
+    
+    return combined_html, page, gr.update(visible=random_has_next)
 
 # Load more functionality for popular books
-def load_more(page, current_popular_html):
+def load_more_popular(page, current_popular_html):
     page += 1
-    popular_books = get_popular_books(page)
+    popular_books = get_popular_books(page=page)
+    
+    if popular_books.empty:
+        return current_popular_html, page, gr.update(visible=False)
+    
     new_html = create_gallery_html(popular_books)
+    # Append new books to existing HTML
+    combined_html = current_popular_html.replace('</div></div>', '') + new_html.replace('<div class="horizontal-scroll"><div class="scroll-container">', '')
     
-    # For simplicity, we'll replace instead of append to avoid complexity
-    has_next = len(popular_books) == POPULAR_PAGE_SIZE
+    popular_has_next = len(popular_books) == POPULAR_PAGE_SIZE
     
-    return new_html, page, gr.update(visible=has_next)
+    return combined_html, page, gr.update(visible=popular_has_next)
 
 # Refresh random books (with current search if any)
 def refresh_random(query):
-    random_books = get_random_books(query=query)
+    random_books = get_random_books(query=query, page=0)
     random_html = create_gallery_html(random_books)
     
+    random_has_next = len(random_books) == RANDOM_PAGE_SIZE and len(random_books) < len(df)
+    
     if query:
-        results_text = f"🎲 Found {len(random_books)} random books for '{query}'"
+        total_random = len(df[df["title_lower"].str.contains(query, na=False) | 
+                             df["authors_lower"].apply(lambda lst: any(query in a for a in lst)) |
+                             df["genres_lower"].apply(lambda lst: any(query in g for g in lst))])
+        results_text = f"🎲 Found {total_random} books for '{query}' • Showing {len(random_books)}"
     else:
         results_text = "🎲 Discover Random Books"
     
-    return random_html, results_text
+    return random_html, 0, gr.update(visible=random_has_next), results_text
 
 # Clear search - resets to default view
 def clear_search():
@@ -186,14 +225,14 @@ with gr.Blocks(css="""
     }
     .book-title {
         font-weight: bold;
-        color: #777;
-        font-size: 12px;
-        line-height: 1.2;
-        margin-bottom: 4px;
+        font-size: 13px;
+        line-height: 1.3;
+        margin-bottom: 6px;
         display: -webkit-box;
         -webkit-line-clamp: 2;
         -webkit-box-orient: vertical;
         overflow: hidden;
+        color: #2c3e50; /* Darker color for better visibility */
     }
     .book-authors {
         font-size: 11px;
@@ -249,6 +288,7 @@ with gr.Blocks(css="""
         display: flex;
         justify-content: center;
         margin-top: 15px;
+        gap: 10px;
     }
     .empty-message {
         text-align: center;
@@ -299,6 +339,10 @@ with gr.Blocks(css="""
                 refresh_btn = gr.Button("🔄 Refresh Random", elem_classes="refresh-btn", size="sm")
             
             random_html = gr.HTML()
+            
+            with gr.Row(elem_classes="load-more-container"):
+                load_more_random_btn = gr.Button("📚 Load More Random Books", visible=False, variant="primary")
+                random_page_state = gr.State(0)
         
         # Popular Books Section (UNAFFECTED by search)
         with gr.Column(elem_classes="gallery-container"):
@@ -308,38 +352,47 @@ with gr.Blocks(css="""
             popular_html = gr.HTML()
             
             with gr.Row(elem_classes="load-more-container"):
-                load_more_button = gr.Button("📚 Load More Popular Books", visible=False, variant="primary")
-                page_state = gr.State(0)
+                load_more_popular_btn = gr.Button("📚 Load More Popular Books", visible=False, variant="primary")
+                popular_page_state = gr.State(0)
     
     # Event handlers
     search_box.submit(
         initial_load, 
         inputs=[search_box], 
-        outputs=[random_html, popular_html, page_state, load_more_button, random_results_info]
+        outputs=[random_html, popular_html, random_page_state, popular_page_state, 
+                load_more_random_btn, load_more_popular_btn, random_results_info]
     )
     
-    load_more_button.click(
-        load_more,
-        inputs=[page_state, popular_html],
-        outputs=[popular_html, page_state, load_more_button]
+    load_more_random_btn.click(
+        load_more_random,
+        inputs=[search_box, random_page_state, random_html],
+        outputs=[random_html, random_page_state, load_more_random_btn]
+    )
+    
+    load_more_popular_btn.click(
+        load_more_popular,
+        inputs=[popular_page_state, popular_html],
+        outputs=[popular_html, popular_page_state, load_more_popular_btn]
     )
     
     clear_btn.click(
         clear_search,
-        outputs=[search_box, random_html, popular_html, page_state, load_more_button, random_results_info]
+        outputs=[search_box, random_html, popular_html, random_page_state, popular_page_state, 
+                load_more_random_btn, load_more_popular_btn, random_results_info]
     )
     
     refresh_btn.click(
         refresh_random,
         inputs=[search_box],
-        outputs=[random_html, random_results_info]
+        outputs=[random_html, random_page_state, load_more_random_btn, random_results_info]
     )
     
     # Load default books when app starts
     demo.load(
         initial_load,
         inputs=[search_box],
-        outputs=[random_html, popular_html, page_state, load_more_button, random_results_info]
+        outputs=[random_html, popular_html, random_page_state, popular_page_state, 
+                load_more_random_btn, load_more_popular_btn, random_results_info]
     )
 
 if __name__ == "__main__":
