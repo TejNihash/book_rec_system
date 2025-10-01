@@ -1,57 +1,86 @@
-import gradio as gr
-import pandas as pd
 import ast
 
-# ---------------- LOAD DATA ----------------
-DATA_CSV = "data_mini_books.csv"
+# Load dataset
+df = pd.read_csv("data_mini_books.csv")  # title, authors, genres, image_url
 
-df = pd.read_csv(DATA_CSV)
+# Convert authors/genres from string -> Python list
 df["authors"] = df["authors"].apply(lambda x: ast.literal_eval(x) if isinstance(x, str) else x)
-df["genres"] = df["genres"].apply(lambda x: ast.literal_eval(x) if isinstance(x, str) else x)
+df["authors_lower"] = df["authors"].apply(lambda lst: [a.lower() for a in lst])
+df["genres_lower"] = df["genres"].apply(lambda lst: [g.lower() for g in lst])
 
-# ---------------- HELPERS ----------------
-def make_gallery_data(indices):
-    out = []
-    for idx in indices:
-        row = df.iloc[int(idx)]
-        caption = f"{row['title']}\nby {', '.join(row['authors'])}"
-        out.append((row["image_url"], caption))
-    return out
+# Pagination settings
+PAGE_SIZE = 20  # number of books per page
 
-def get_popular_books():
-    sorted_df = df.sort_values("ratings_count", ascending=False)
-    top_indices = list(sorted_df.head(20).index)
-    return make_gallery_data(top_indices), top_indices
+def search_books(query, page=0):
+    query = query.strip().lower()
+    
+    # Filter dataset
+    if query:
+        mask_title = df["title_lower"].str.contains(query)
+        mask_authors = df["authors_lower"].apply(lambda lst: any(query in a for a in lst))
+        filtered = df[mask_title | mask_authors | mask_genres]
+    else:
+        filtered = df
 
-# ---------------- UI ----------------
-with gr.Blocks(css="""
-.book-shelf .gr-gallery-item {
-    border: 2px solid #ddd;
-    border-radius: 8px;
-    padding: 5px;
-    margin: 5px;
-    text-align: center;
-    box-shadow: 2px 2px 6px #ccc;
-}
-.book-shelf .gr-gallery-item img {
-    width: 120px;
-    height: 180px;
-    object-fit: cover;
-}
-""") as demo:
-    gr.Markdown("## 🔥 Popular Books Carousel")
+    # Optional: show only top 500 results for performance
+    filtered = filtered.head(500)
+    
+    # Pagination
+    start = page * PAGE_SIZE
+    end = start + PAGE_SIZE
+    page_data = filtered.iloc[start:end]
 
-    popular_gallery = gr.Gallery(
-        label="Popular Books",
-        rows=1,
-        columns=None,   # auto-fit multiple books
-        show_label=True,
-        elem_classes="book-shelf",
-        preview=False
+    # Prepare gallery data
+    gallery_data = [
+        (img, f"**{title}**\nby {', '.join(authors)}\n*{', '.join(genres)}*")
+        for img, title, authors, genres in zip(
+            page_data["image_url"], page_data["title"], page_data["authors"], page_data["genres"]
+        )
+    ]
+    
+    # Return gallery + next page availability
+    has_next = end < len(filtered)
+    return gallery_data, has_next
+
+# For handling "Load More" button
+def load_more(query, page):
+    page += 1
+    gallery_data, has_next = search_books(query, page)
+    return gallery_data, page, has_next
+
+with gr.Blocks() as demo:
+    gr.Markdown("# 📚 My Book Showcase")
+    
+    search_box = gr.Textbox(
+        label="Search by title, author, or genre",
+        placeholder="e.g. Aesop, fantasy, Dune...",
+        value=""
     )
 
-    popular_indices_state = gr.State([])
-
-    demo.load(get_popular_books, inputs=[], outputs=[popular_gallery, popular_indices_state])
+    
+    gallery = gr.Gallery(
+        label="Books", show_label=False, columns=3, height="auto", scroll=True
+    )
+    
+    load_more_button = gr.Button("Load More")
+    
+    # Hidden state to track current page
+    page_state = gr.State(0)
+    
+    # Initial search/load
+    def initial_load(query):
+        gallery_data, has_next = search_books(query, page=0)
+        return gallery_data, 0, has_next
+    
+    search_box.submit(initial_load, inputs=search_box, outputs=[gallery, page_state, load_more_button])
+    
+    # Load more functionality
+    load_more_button.click(load_more, inputs=[search_box, page_state], outputs=[gallery, page_state, load_more_button])
+    
+    # Hide "Load More" button if no next page
+    def toggle_load_more(has_next):
+        return gr.update(visible=has_next)
+    
+    load_more_button.click(toggle_load_more, inputs=[load_more_button], outputs=[load_more_button])
 
 demo.launch()
