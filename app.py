@@ -186,7 +186,7 @@ with gr.Blocks(css="""
     }
     .book-title {
         font-weight: bold;
-        color: #777
+        color: #777;
         font-size: 12px;
         line-height: 1.2;
         margin-bottom: 4px;
