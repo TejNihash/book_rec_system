@@ -19,6 +19,7 @@ PAGE_SIZE = 20  # number of books per page
 
 
 def search_books(query, page=0):
+    """Filter + paginate dataset"""
     query = query.strip().lower()
     
     # Filter dataset
@@ -51,14 +52,27 @@ def search_books(query, page=0):
     return gallery_data, has_next
 
 
-# For handling "Load More" button
-def load_more(query, page):
+# Initial search/load
+def initial_load(query):
+    gallery_data, has_next = search_books(query, page=0)
+    return gallery_data, 0, gr.update(visible=has_next)
+
+
+# Load more functionality (append new results to existing gallery)
+def load_more(query, page, current_gallery):
     page += 1
     gallery_data, has_next = search_books(query, page)
-    return gallery_data, page, gr.update(visible=has_next)
+    # Append new results to existing gallery
+    new_gallery = current_gallery + gallery_data
+    return new_gallery, page, gr.update(visible=has_next)
 
 
-with gr.Blocks() as demo:
+# Build UI with custom horizontal-scrolling gallery
+with gr.Blocks(css="""
+.scroll-gallery {display:flex; overflow-x:auto; gap:16px; padding:10px;}
+.scroll-gallery .thumbnail {flex:0 0 auto; width:200px;}
+""") as demo:
+    
     gr.Markdown("# 📚 My Book Showcase")
     
     search_box = gr.Textbox(
@@ -68,22 +82,20 @@ with gr.Blocks() as demo:
     )
 
     gallery = gr.Gallery(
-        label="Books", show_label=False, columns=3, height="auto"
+        label="Books", show_label=False, elem_classes="scroll-gallery"
     )
     
     load_more_button = gr.Button("Load More", visible=False)
-    
-    # Hidden state to track current page
     page_state = gr.State(0)
     
-    # Initial search/load
-    def initial_load(query):
-        gallery_data, has_next = search_books(query, page=0)
-        return gallery_data, 0, gr.update(visible=has_next)
-    
+    # Connect search
     search_box.submit(initial_load, inputs=search_box, outputs=[gallery, page_state, load_more_button])
     
-    # Load more functionality
-    load_more_button.click(load_more, inputs=[search_box, page_state], outputs=[gallery, page_state, load_more_button])
+    # Connect load more
+    load_more_button.click(
+        load_more,
+        inputs=[search_box, page_state, gallery],
+        outputs=[gallery, page_state, load_more_button]
+    )
 
 demo.launch()
