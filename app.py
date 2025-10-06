@@ -1,8 +1,6 @@
 import ast
 import pandas as pd
 import gradio as gr
-from gradio_modal import Modal
-import random
 
 # ---------- Load dataset ----------
 df = pd.read_csv("data_mini_books.csv")
@@ -12,10 +10,10 @@ if "id" not in df.columns:
 df["authors"] = df["authors"].apply(lambda x: ast.literal_eval(x) if isinstance(x, str) else x)
 df["genres"] = df["genres"].apply(lambda x: ast.literal_eval(x) if isinstance(x, str) else x)
 
-BOOKS_PER_LOAD = 6  # number of books per load
+BOOKS_PER_LOAD = 6  # adjust as needed
 
 # ---------- Helpers ----------
-def show_book_details(book_id):
+def show_book_inline(book_id):
     book = df[df["id"] == book_id].iloc[0]
     html = f"""
     <div style="text-align:center;">
@@ -33,37 +31,36 @@ def get_books_page(df_subset, page):
     end_idx = start_idx + BOOKS_PER_LOAD
     return df_subset.iloc[start_idx:end_idx], len(df_subset) > end_idx
 
-def create_book_buttons(books_df):
-    """Return a list of gr.Buttons and their IDs"""
+def create_book_buttons(df_subset):
+    """Return list of (Button, book_id) tuples"""
     buttons = []
-    for _, book in books_df.iterrows():
+    for _, book in df_subset.iterrows():
         btn = gr.Button(book["title"], elem_classes="book-card-btn")
         buttons.append((btn, book["id"]))
     return buttons
 
 # ---------- Gradio UI ----------
 with gr.Blocks(css="""
-/* minimal styling for demo */
+/* styling for inline modal overlay */
 .book-card-btn { margin:5px; width:150px; height:50px; }
 .books-container { max-height:400px; overflow-y:auto; border:1px solid #ddd; padding:10px; display:flex; flex-wrap:wrap; }
 .section { margin-bottom:20px; }
-.gr-modal {
-    position: fixed !important;
-    top: 50% !important;
-    left: 50% !important;
-    transform: translate(-50%, -50%) !important;
-    max-height: 90vh;
-    overflow-y: auto;
+.modal-overlay { 
+    position: fixed; 
+    top: 50%; left: 50%; 
+    transform: translate(-50%, -50%); 
+    background: white; 
+    border: 1px solid #ccc; 
+    padding: 20px; 
+    z-index: 9999; 
+    max-height: 80vh; 
+    overflow-y: auto; 
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
 }
+.modal-overlay button { margin-top:10px; }
 """) as demo:
 
-    gr.Markdown("# 📚 Book Explorer with Modal (Scroll-Friendly)")
-
-    # ---------- Modal (fullscreen) ----------
-    with Modal("Book Details", visible=False) as book_modal:
-        book_detail_html = gr.HTML()
-        close_modal_btn = gr.Button("❌ Close")
-    
+    gr.Markdown("# 📚 Book Explorer with Inline Modal")
 
     # ---------- Search ----------
     with gr.Row():
@@ -86,13 +83,22 @@ with gr.Blocks(css="""
         popular_page = gr.State(value=1)
         popular_loaded_books = gr.State(value=df.head(BOOKS_PER_LOAD))
 
+    # ---------- Inline Modal Column ----------
+    inline_modal = gr.Column(visible=False, elem_classes="modal-overlay")
+    book_detail_html = gr.HTML()
+    close_modal_btn = gr.Button("❌ Close")
+    with inline_modal:
+        book_detail_html
+        close_modal_btn
+
+    close_modal_btn.click(lambda: gr.update(visible=False), None, inline_modal)
+
     # ---------- Functions to populate grids ----------
     def display_books(container, books_df):
-        """Populate a column with book buttons"""
         buttons = create_book_buttons(books_df)
         with container:
             for btn, book_id in buttons:
-                btn.click(show_book_details, inputs=[gr.State(book_id)], outputs=[book_modal, book_detail_html])
+                btn.click(show_book_inline, inputs=[gr.State(book_id)], outputs=[inline_modal, book_detail_html])
         return buttons
 
     # ---------- Initialize Random and Popular ----------
