@@ -52,10 +52,9 @@ with gr.Blocks(css="""
     gr.Markdown("# 📚 Book Explorer with Modal")
 
     # ---------- Modal ----------
-    with Modal("Book Details", visible=False) as book_modal:
+    with Modal("Book Details", visible=False, fullscreen=True) as book_modal:
         book_detail_html = gr.HTML()
         close_modal_btn = gr.Button("❌ Close")
-
     close_modal_btn.click(lambda: gr.update(visible=False), None, book_modal)
 
     # ---------- Search ----------
