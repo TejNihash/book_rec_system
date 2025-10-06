@@ -1,6 +1,7 @@
 import ast
 import pandas as pd
 import gradio as gr
+import random
 
 # ---------- Load dataset ----------
 df = pd.read_csv("data_mini_books.csv")
