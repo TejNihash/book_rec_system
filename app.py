@@ -68,9 +68,9 @@ with gr.Blocks(css="""
 .book-authors { font-size:10px; color:#555; overflow:hidden; display:-webkit-box; -webkit-line-clamp:1; -webkit-box-orient:vertical; }
 
 #detail-overlay { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:1000; }
-#detail-box { position:absolute; background:#fff; border-radius:8px; padding:16px; max-width:600px; box-shadow:0 8px 20px rgba(0,0,0,0.35); color:#111; }
+#detail-box { position:absolute; background:#fff; border-radius:8px; padding:16px; max-width:600px; box-shadow:0 8px 20px rgba(0,0,0,0.35); color:#555; }
 #detail-close { position:absolute; top:8px; right:12px; cursor:pointer; font-size:20px; font-weight:bold; }
-#detail-content { line-height:1.5; font-size:14px; color:#222; }
+#detail-content { line-height:1.5; font-size:14px; color:#555; }
 """) as demo:
 
     gr.Markdown("# 🎲 Random Books Section")
