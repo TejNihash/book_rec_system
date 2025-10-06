@@ -11,12 +11,18 @@ if "id" not in df.columns:
 df["authors"] = df["authors"].apply(lambda x: ast.literal_eval(x) if isinstance(x, str) else x)
 df["genres"] = df["genres"].apply(lambda x: ast.literal_eval(x) if isinstance(x, str) else x)
 
-BOOKS_PER_LOAD = 6  # per row demo
+BOOKS_PER_LOAD = 6
 
 # ---------- Helpers ----------
-def create_book_button(book):
-    """Return a Gradio Button that triggers modal with book details"""
-    return gr.Button(book["title"], elem_classes="book-card-btn"), book["id"]
+def create_book_buttons_html(books_df):
+    html_parts = []
+    for _, row in books_df.iterrows():
+        html_parts.append(f"""
+        <button class="book-card-btn" onclick="document.getElementById('hidden_book_id').value='{row['id']}';document.getElementById('hidden_btn').click();">
+            {row['title']}
+        </button>
+        """)
+    return "<div>" + "".join(html_parts) + "</div>"
 
 def show_book_details(book_id):
     book = df[df["id"] == book_id].iloc[0]
@@ -26,12 +32,11 @@ def show_book_details(book_id):
         <h2>{book['title']}</h2>
         <h4>by {', '.join(book['authors'])}</h4>
         <p><strong>Genres:</strong> {', '.join(book['genres'])}</p>
-        <p>{book.get('description', 'No description available.')}</p>
+        <p>{book.get('description','No description available.')}</p>
     </div>
     """
     return gr.update(visible=True), html
 
-# ---------- Search / Pagination ----------
 def search_books(query, page=0):
     query = query.strip().lower()
     if query:
@@ -45,20 +50,9 @@ def search_books(query, page=0):
     end_idx = start_idx + BOOKS_PER_LOAD
     return filtered.iloc[start_idx:end_idx], len(filtered) > end_idx
 
-def load_more_books(page, current_df, query="", section="random"):
-    if section == "random":
-        new_books, has_more = search_books(query, page)
-    else:
-        start_idx = page * BOOKS_PER_LOAD
-        end_idx = start_idx + BOOKS_PER_LOAD
-        new_books = df.iloc[start_idx:end_idx]
-        has_more = len(df) > end_idx
-    combined = pd.concat([current_df, new_books], ignore_index=True)
-    return combined, page+1, has_more
-
 # ---------- Gradio UI ----------
 with gr.Blocks(css="""
-/* minimal styling for demo */
+/* Minimal styling */
 .book-card-btn { margin:5px; width:150px; height:50px; }
 .books-container { max-height:400px; overflow-y:auto; border:1px solid #ddd; padding:10px; }
 .section { margin-bottom:20px; }
@@ -79,48 +73,27 @@ with gr.Blocks(css="""
     # ---------- Random Books ----------
     with gr.Column(elem_classes="section"):
         gr.Markdown("🎲 Random Books")
-        random_display = gr.HTML(elem_classes="books-container")
+        initial_random_books, random_has_more = search_books("", 0)
+        random_display = gr.HTML(value=create_book_buttons_html(initial_random_books), elem_classes="books-container")
         load_random_btn = gr.Button("📚 Load More Random Books")
-        random_page = gr.State(0)
-        random_loaded_books = gr.State(pd.DataFrame())
+        random_page = gr.State(1)
+        random_loaded_books = gr.State(initial_random_books)
 
     # ---------- Popular Books ----------
     with gr.Column(elem_classes="section"):
         gr.Markdown("📚 Popular Books")
-        popular_display = gr.HTML(elem_classes="books-container")
+        initial_popular_books = df.head(BOOKS_PER_LOAD)
+        popular_display = gr.HTML(value=create_book_buttons_html(initial_popular_books), elem_classes="books-container")
         load_popular_btn = gr.Button("📚 Load More Popular Books")
-        popular_page = gr.State(0)
-        popular_loaded_books = gr.State(pd.DataFrame())
+        popular_page = gr.State(1)
+        popular_loaded_books = gr.State(initial_popular_books)
 
-    # ---------- Event Handlers ----------
-    # Load initial random books
-    def init_random():
-        books, has_more = search_books("", 0)
-        return create_book_buttons_html(books), 1, books
-    def init_popular():
-        books = df.iloc[:BOOKS_PER_LOAD]
-        return create_book_buttons_html(books), 1, books
-
-    def create_book_buttons_html(books_df):
-        html_parts = []
-        for idx, row in books_df.iterrows():
-            html_parts.append(f"""
-            <button class="book-card-btn" onclick="document.getElementById('hidden_book_id').value='{row['id']}';document.getElementById('hidden_btn').click();">{row['title']}</button>
-            """)
-        return "<div>" + "".join(html_parts) + "</div>"
-
-    # Hidden inputs to trigger modal
+    # ---------- Hidden inputs to trigger modal ----------
     hidden_book_id = gr.Textbox(visible=False, elem_id="hidden_book_id")
     hidden_btn = gr.Button(visible=False, elem_id="hidden_btn")
 
-    def show_book_from_hidden(book_id):
-        return show_book_details(book_id)
-
-    hidden_btn.click(show_book_from_hidden, [hidden_book_id], [book_modal, book_detail_html])
+    # ---------- Modal Callbacks ----------
+    hidden_btn.click(show_book_details, [hidden_book_id], [book_modal, book_detail_html])
     close_modal_btn.click(lambda: gr.update(visible=False), None, book_modal)
-
-    # Load initial content
-    random_display.update(init_random()[0])
-    popular_display.update(init_popular()[0])
 
 demo.launch()
