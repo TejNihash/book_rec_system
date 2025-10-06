@@ -68,13 +68,17 @@ with gr.Blocks() as demo:
         popular_displayed_ids = gr.State([])
 
     # ---------- Load More ----------
-    load_random_btn.click(load_more, 
-                          inputs=["random", random_page, random_displayed_ids],
-                          outputs=[random_display, random_page, random_displayed_ids])
+section_random = gr.State("random")
+section_popular = gr.State("popular")
 
-    load_popular_btn.click(load_more, 
-                           inputs=["popular", popular_page, popular_displayed_ids],
-                           outputs=[popular_display, popular_page, popular_displayed_ids])
+load_random_btn.click(load_more, 
+                      inputs=[section_random, random_page, random_displayed_ids],
+                      outputs=[random_display, random_page, random_displayed_ids])
+
+load_popular_btn.click(load_more, 
+                       inputs=[section_popular, popular_page, popular_displayed_ids],
+                       outputs=[popular_display, popular_page, popular_displayed_ids])
+
 
     # ---------- Collapse ----------
     collapse_random_btn.click(collapse_all_cards,
