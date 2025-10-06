@@ -10,7 +10,7 @@ if "id" not in df.columns:
 df["authors"] = df["authors"].apply(lambda x: ast.literal_eval(x) if isinstance(x, str) else x)
 df["genres"] = df["genres"].apply(lambda x: ast.literal_eval(x) if isinstance(x, str) else x)
 
-BOOKS_PER_LOAD = 6
+BOOKS_PER_LOAD = 12  # 2 rows of 6
 
 # ---------- HTML rendering ----------
 def make_books_html(start, count):
@@ -26,34 +26,55 @@ def make_books_html(start, count):
              data-img="{book['image_url']}" 
              data-desc="{book.get('description', 'No description available.')}">
             <img src="{book['image_url']}" 
-                 onerror="this.src='https://via.placeholder.com/120x180/667eea/white?text=No+Image'"
+                 onerror="this.src='https://via.placeholder.com/120x180/667eea/ffffff?text=No+Image'"
                  class='book-cover'>
             <div class='book-title'>{book['title']}</div>
             <div class='book-authors'>{', '.join(book['authors'])}</div>
         </div>
         """
         cards.append(card)
-    return f"<div class='books-container'>{''.join(cards)}</div>"
+    return ''.join(cards)
 
 # ---------- Gradio UI ----------
 with gr.Blocks(css="""
-.books-container {
-    display:flex; flex-wrap:nowrap; overflow-x:auto; gap:15px; padding:10px;
+.books-wrapper {
+    max-height: 600px;
+    overflow-y: auto;
+    background: #121212;
+    border-radius: 10px;
+    padding: 15px;
+    border: 1px solid #333;
 }
-.book-card { 
-    border:1px solid #444; padding:10px; border-radius:10px; 
-    cursor:pointer; transition: all 0.2s; width:180px; text-align:center;
-    background:black; color:white; font-weight:bold; flex:0 0 auto;
-}
-.book-card:hover { box-shadow:0 4px 12px rgba(0,0,0,0.3); transform:translateY(-2px);}
-.book-cover { 
-    width:100%; height:150px; object-fit:cover; border-radius:6px; margin-bottom:8px;
-}
-.book-title { font-size:13px; font-weight:bold; }
-.book-authors { font-size:11px; color:#ccc; }
 
-.books-container::-webkit-scrollbar { height:8px; }
-.books-container::-webkit-scrollbar-thumb { background:#bbb; border-radius:4px; }
+.books-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 15px;
+    justify-items: center;
+}
+
+.book-card { 
+    border:1px solid #444; 
+    padding:10px; 
+    border-radius:10px; 
+    cursor:pointer; 
+    transition: all 0.2s; 
+    width:160px; 
+    text-align:center;
+    background:#1e1e1e; 
+    color:#f5f5f5; 
+    font-weight:bold; 
+    flex:0 0 auto;
+}
+.book-card:hover { box-shadow:0 4px 16px rgba(255,255,255,0.15); transform:translateY(-2px);}
+.book-cover { 
+    width:100%; height:160px; object-fit:cover; border-radius:6px; margin-bottom:8px;
+}
+.book-title { font-size:13px; font-weight:bold; color:#fff; }
+.book-authors { font-size:11px; color:#bbb; }
+
+.books-wrapper::-webkit-scrollbar { width:8px; }
+.books-wrapper::-webkit-scrollbar-thumb { background:#444; border-radius:4px; }
 
 #detail-overlay {
     position:fixed; top:0; left:0; width:100%; height:100%;
@@ -61,8 +82,8 @@ with gr.Blocks(css="""
     z-index:999;
 }
 #detail-box {
-    background:white; color:black; padding:25px; border-radius:12px;
-    width:700px; max-height:80vh; overflow-y:auto; box-shadow:0 4px 16px rgba(0,0,0,0.3);
+    background:#f8f8f8; color:#111; padding:25px; border-radius:12px;
+    width:750px; max-height:80vh; overflow-y:auto; box-shadow:0 4px 16px rgba(0,0,0,0.3);
     animation: fadeIn 0.2s ease-in-out;
 }
 #detail-close {
@@ -74,18 +95,22 @@ with gr.Blocks(css="""
 }
 """) as demo:
 
-    gr.Markdown("# 📚 Book Explorer — Horizontal Scroll with Overlay Details")
+    gr.Markdown("# 📚 Book Explorer — Scrollable Library with Overlay Details")
 
     start_idx = gr.State(0)
-    books_html = gr.HTML(value=make_books_html(0, BOOKS_PER_LOAD))
+    all_books_html = gr.HTML(value=f"<div class='books-container'>{make_books_html(0, BOOKS_PER_LOAD)}</div>")
 
-    def load_more_books(start_idx):
+    def load_more_books(current_html, start_idx):
         start_idx += BOOKS_PER_LOAD
-        new_html = make_books_html(start_idx, BOOKS_PER_LOAD)
-        return new_html, start_idx
+        new_cards = make_books_html(start_idx, BOOKS_PER_LOAD)
+        combined_html = current_html.replace("</div>", new_cards + "</div>")
+        return combined_html, start_idx
 
-    load_more_btn = gr.Button("📚 Load More Books")
-    load_more_btn.click(load_more_books, inputs=[start_idx], outputs=[books_html, start_idx])
+    with gr.Column(elem_classes="books-wrapper"):
+        all_books_html.render()
+        load_more_btn = gr.Button("📖 Load More Books")
+
+    load_more_btn.click(load_more_books, inputs=[all_books_html, start_idx], outputs=[all_books_html, start_idx])
 
     # ---------- Overlay JS ----------
     gr.HTML("""
@@ -108,13 +133,13 @@ with gr.Blocks(css="""
         const img = card.dataset.img;
 
         const detailHTML = `
-            <div style="display:flex;gap:20px;">
-                <img src="${img}" style="width:200px;height:auto;border-radius:8px;">
+            <div style="display:flex;gap:20px;align-items:flex-start;">
+                <img src="${img}" style="width:220px;height:auto;border-radius:8px;">
                 <div>
-                    <h2 style="margin:0;">${title}</h2>
+                    <h2 style="margin:0 0 10px 0;">${title}</h2>
                     <p><strong>Author(s):</strong> ${authors}</p>
                     <p><strong>Genres:</strong> ${genres}</p>
-                    <div style="margin-top:10px; line-height:1.5;">${desc}</div>
+                    <div style="margin-top:10px; line-height:1.6;">${desc}</div>
                 </div>
             </div>
         `;
