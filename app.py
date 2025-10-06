@@ -1,8 +1,6 @@
 import ast
 import pandas as pd
 import gradio as gr
-from gradio_modal import Modal
-import random
 
 # ---------- Load dataset ----------
 df = pd.read_csv("data_mini_books.csv")
@@ -15,67 +13,52 @@ df["genres"] = df["genres"].apply(lambda x: ast.literal_eval(x) if isinstance(x,
 BOOKS_PER_LOAD = 6
 
 # ---------- Helpers ----------
-def show_book_details(book_id):
+def collapse_book_card(title, authors):
+    """Collapsed view HTML"""
+    return f"<b>{title}</b><br><small>{', '.join(authors)}</small>"
+
+def expand_book_card(book_id):
+    """Expanded view HTML"""
     book = df[df["id"] == book_id].iloc[0]
     html = f"""
-    <div style="text-align:center; max-height: 80vh; overflow-y:auto;">
-        <img src="{book['image_url']}" style="width:180px;height:auto;border-radius:8px;margin-bottom:10px;">
-        <h2>{book['title']}</h2>
-        <h4>by {', '.join(book['authors'])}</h4>
+    <div style="text-align:center;">
+        <img src="{book['image_url']}" style="width:120px;height:auto;margin-bottom:5px;">
+        <h3>{book['title']}</h3>
+        <p><em>{', '.join(book['authors'])}</em></p>
         <p><strong>Genres:</strong> {', '.join(book['genres'])}</p>
         <p>{book.get('description','No description available.')}</p>
     </div>
     """
-    # Also move modal near scroll with JS hack
-    js_move_modal = """
-    <script>
-    const modal = document.querySelector('.gr-modal');
-    if(modal) {
-        const scrollY = window.scrollY || window.pageYOffset;
-        modal.style.top = (scrollY + window.innerHeight/4) + "px";
-    }
-    </script>
-    """
-    return gr.update(visible=True), html + js_move_modal
-
-def create_book_buttons(df_subset):
-    buttons = []
-    for _, book in df_subset.iterrows():
-        btn = gr.Button(book["title"], elem_classes="book-card-btn")
-        buttons.append((btn, book["id"]))
-    return buttons
+    return html
 
 # ---------- Gradio UI ----------
 with gr.Blocks(css="""
-.book-card-btn { margin:5px; width:150px; height:50px; }
-.books-container { max-height:400px; overflow-y:auto; border:1px solid #ddd; padding:10px; display:flex; flex-wrap:wrap; }
-.section { margin-bottom:20px; }
+.book-card { 
+    border:1px solid #ccc; padding:10px; border-radius:8px; margin:5px; 
+    width:160px; text-align:center; cursor:pointer; transition: all 0.2s; 
+}
+.book-card:hover { box-shadow:0 2px 8px rgba(0,0,0,0.15); }
+.books-container { display:flex; flex-wrap:wrap; max-height:400px; overflow-y:auto; }
 """) as demo:
 
-    gr.Markdown("# 📚 Book Explorer with Scroll-Aware Modal")
-
-    # ---------- Modal ----------
-    with Modal("Book Details", visible=False) as book_modal:
-        book_detail_html = gr.HTML()
-        close_modal_btn = gr.Button("❌ Close")
-    close_modal_btn.click(lambda: gr.update(visible=False), None, book_modal)
+    gr.Markdown("# 📚 Expandable Book Cards")
 
     # ---------- Random Books ----------
-    with gr.Column(elem_classes="section"):
-        gr.Markdown("🎲 Random Books")
-        random_display_container = gr.Column(elem_classes="books-container")
-        initial_random_books = df.sample(frac=1).reset_index(drop=True).iloc[:BOOKS_PER_LOAD]
-        buttons = create_book_buttons(initial_random_books)
-        for btn, book_id in buttons:
-            btn.click(show_book_details, inputs=[gr.State(book_id)], outputs=[book_modal, book_detail_html])
+    gr.Markdown("🎲 Random Books")
+    random_display_container = gr.Column(elem_classes="books-container")
+    random_books = df.sample(frac=1).reset_index(drop=True).iloc[:BOOKS_PER_LOAD]
+
+    for _, book in random_books.iterrows():
+        card_html = gr.HTML(value=collapse_book_card(book['title'], book['authors']), elem_classes="book-card")
+        card_html.click(fn=lambda bid=book['id']: expand_book_card(bid), inputs=[], outputs=card_html)
 
     # ---------- Popular Books ----------
-    with gr.Column(elem_classes="section"):
-        gr.Markdown("📚 Popular Books")
-        popular_display_container = gr.Column(elem_classes="books-container")
-        initial_popular_books = df.head(BOOKS_PER_LOAD)
-        buttons = create_book_buttons(initial_popular_books)
-        for btn, book_id in buttons:
-            btn.click(show_book_details, inputs=[gr.State(book_id)], outputs=[book_modal, book_detail_html])
+    gr.Markdown("📚 Popular Books")
+    popular_display_container = gr.Column(elem_classes="books-container")
+    popular_books = df.head(BOOKS_PER_LOAD)
+
+    for _, book in popular_books.iterrows():
+        card_html = gr.HTML(value=collapse_book_card(book['title'], book['authors']), elem_classes="book-card")
+        card_html.click(fn=lambda bid=book['id']: expand_book_card(bid), inputs=[], outputs=card_html)
 
 demo.launch()
