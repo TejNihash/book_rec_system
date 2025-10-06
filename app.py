@@ -81,11 +81,11 @@ with gr.Blocks(css="""
     width:500px; text-align:left; background:white; color:black;
     box-shadow:0 4px 16px rgba(0,0,0,0.2); 
 }
-.books-container { display:flex; flex-wrap:wrap; max-height:450px; overflow-y:auto; padding:5px; }
+.books-container { display:flex; flex-direction:row; flex-wrap:wrap; max-height:450px; overflow-y:auto; padding:5px; }
 .load-more-btn { margin:10px 0; }
 """) as demo:
 
-    gr.Markdown("# 📚 Expandable Book Cards with Covers & Load More")
+    gr.Markdown("# 📚 Expandable Book Cards (Row Layout + ESC)")
 
     gr.Markdown("🎲 Random Books")
     random_container = gr.Column(elem_classes="books-container")
@@ -103,5 +103,24 @@ with gr.Blocks(css="""
     load_random_btn.click(fn=load_more_books, 
                           inputs=[random_start, random_container, gr.State("random")],
                           outputs=[random_container, gr.State([]), random_start])
+
+    # ---------- JS to collapse all expanded cards on ESC ----------
+    js_escape = """
+    <script>
+    document.addEventListener('keydown', function(event) {
+        if(event.key === 'Escape') {
+            let expanded = document.querySelectorAll('.card-expanded');
+            expanded.forEach(card => {
+                const title = card.getAttribute('data-title');
+                const authors = card.getAttribute('data-authors');
+                card.innerHTML = '<img src="" style="width:100%;height:120px;"><b>' + title + '</b><br><small>' + authors + '</small>';
+                card.classList.remove('card-expanded');
+                card.classList.add('card-collapsed');
+            });
+        }
+    });
+    </script>
+    """
+    gr.HTML(js_escape)
 
 demo.launch()
