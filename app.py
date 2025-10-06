@@ -116,11 +116,11 @@ with gr.Blocks(css="""
 
     # ---------- Initial load ----------
     def initial_load_random(loaded_books):
-        return load_more(loaded_books, pd.DataFrame(), 0)[:2]
+        return load_more(loaded_books, pd.DataFrame(), 0)
     random_display_state.value, random_container.value, random_page_state.value = initial_load_random(random_loaded_state.value)
 
     def initial_load_popular(loaded_books):
-        return load_more(loaded_books, pd.DataFrame(), 0)[:2]
+        return load_more(loaded_books, pd.DataFrame(), 0)
     popular_display_state.value, popular_container.value, popular_page_state.value = initial_load_popular(popular_loaded_state.value)
 
     # ---------- Detail popup ----------
