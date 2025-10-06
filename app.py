@@ -47,16 +47,23 @@ with gr.Blocks(css="""
 .book-card-btn { margin:5px; width:150px; height:50px; }
 .books-container { max-height:400px; overflow-y:auto; border:1px solid #ddd; padding:10px; display:flex; flex-wrap:wrap; }
 .section { margin-bottom:20px; }
+.gr-modal {
+    position: fixed !important;
+    top: 50% !important;
+    left: 50% !important;
+    transform: translate(-50%, -50%) !important;
+    max-height: 90vh;
+    overflow-y: auto;
+}
 """) as demo:
 
     gr.Markdown("# 📚 Book Explorer with Modal (Scroll-Friendly)")
 
     # ---------- Modal (fullscreen) ----------
-    with Modal("Book Details", visible=False, fullscreen=True) as book_modal:
+    with Modal("Book Details", visible=False) as book_modal:
         book_detail_html = gr.HTML()
         close_modal_btn = gr.Button("❌ Close")
-
-    close_modal_btn.click(lambda: gr.update(visible=False), None, book_modal)
+    
 
     # ---------- Search ----------
     with gr.Row():
