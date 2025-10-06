@@ -107,7 +107,7 @@ with gr.Blocks(css="""
         return combined_html, start_idx
 
     with gr.Column(elem_classes="books-wrapper"):
-        all_books_html.render()
+        all_books_html
         load_more_btn = gr.Button("📖 Load More Books")
 
     load_more_btn.click(load_more_books, inputs=[all_books_html, start_idx], outputs=[all_books_html, start_idx])
