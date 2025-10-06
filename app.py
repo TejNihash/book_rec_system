@@ -142,7 +142,135 @@ def show_book_details(book_id):
 
 # ---------- UI ----------
 
-with gr.Blocks(css="") as demo:
+with gr.Blocks(css="""
+    .container {
+        border: 1px solid #e0e0e0;
+        border-radius: 12px;
+        padding: 20px;
+        margin: 20px 0;
+        background: white;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    .books-container {
+        max-height: 500px;
+        overflow-y: auto;
+        padding: 15px;
+        background: #fafafa;
+        border-radius: 8px;
+        border: 1px solid #f0f0f0;
+        margin-bottom: 15px;
+    }
+    .books-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+        gap: 15px;
+    }
+    .book-card {
+        background: white;
+        border-radius: 8px;
+        padding: 12px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        text-align: center;
+        height: 280px;
+        display: flex;
+        flex-direction: column;
+        transition: all 0.3s ease;
+        cursor: pointer;
+    }
+    .book-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+    }
+    .book-card img {
+        width: 100%;
+        height: 160px;
+        object-fit: cover;
+        border-radius: 4px;
+        margin-bottom: 8px;
+    }
+    .book-info {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+    }
+    .title {
+        font-weight: bold;
+        font-size: 12px;
+        line-height: 1.3;
+        margin-bottom: 4px;
+        color: #2c3e50;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+    .authors {
+        font-size: 10px;
+        color: #666;
+        margin-bottom: 3px;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+    .genres {
+        font-size: 9px;
+        color: #888;
+        font-style: italic;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+    .section-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
+    }
+    .section-title {
+        font-size: 18px;
+        font-weight: bold;
+        color: #2c3e50;
+    }
+    .load-more-btn {
+        display: flex;
+        justify-content: center;
+        margin-top: 10px;
+    }
+    .no-books {
+        text-align: center;
+        padding: 40px;
+        color: #666;
+        font-style: italic;
+    }
+    .books-container::-webkit-scrollbar {
+        width: 8px;
+    }
+    .books-container::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 4px;
+    }
+    .books-container::-webkit-scrollbar-thumb {
+        background: #c1c1c1;
+        border-radius: 4px;
+    }
+    .books-container::-webkit-scrollbar-thumb:hover {
+        background: #a8a8a8;
+    }
+    .search-row {
+        margin-bottom: 20px;
+    }
+    .modal-overlay {
+        background: rgba(0,0,0,0.5);
+    }
+    .modal-content {
+        max-width: 800px;
+        max-height: 80vh;
+        overflow-y: auto;
+    }
+""") as demo:
     gr.Markdown("# 📚 Book Explorer")
 
     book_select = gr.Textbox(visible=False, elem_id="book_select")
