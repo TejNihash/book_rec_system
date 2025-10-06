@@ -68,20 +68,28 @@ with gr.Blocks(css="""
 .book-authors { font-size:10px; color:#555; overflow:hidden; display:-webkit-box; -webkit-line-clamp:1; -webkit-box-orient:vertical; }
 
 #detail-overlay { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:1000; }
-#detail-box { position:absolute; background:#fff; border-radius:8px; padding:16px; max-width:600px; box-shadow:0 8px 20px rgba(0,0,0,0.35); color:#555; }
+#detail-box { position:absolute; background:#fff; border-radius:8px; padding:16px; max-width:600px; box-shadow:0 8px 20px rgba(0,0,0,0.35); color:#111; }
 #detail-close { position:absolute; top:8px; right:12px; cursor:pointer; font-size:20px; font-weight:bold; }
-#detail-content { line-height:1.5; font-size:14px; color:#555; }
+#detail-content { line-height:1.5; font-size:14px; color:#111; }
 """) as demo:
 
-    gr.Markdown("# 🎲 Random Books Section")
+    gr.Markdown("# 🎲 Random & Popular Books")
 
-    # Random Books State
-    loaded_books_state = gr.State(df.sample(frac=1).reset_index(drop=True))
-    display_books_state = gr.State(pd.DataFrame())  # currently shown books
-    load_index_state = gr.State(0)  # current "page" index
+    # ---------- Random Books ----------
+    gr.Markdown("🎲 Random Books")
+    random_loaded_state = gr.State(df.sample(frac=1).reset_index(drop=True))
+    random_display_state = gr.State(pd.DataFrame())
+    random_page_state = gr.State(0)
+    random_container = gr.HTML()
+    random_load_btn = gr.Button("📚 Load More Random Books")
 
-    books_container = gr.HTML()
-    load_more_btn = gr.Button("📚 Load More Books")
+    # ---------- Popular Books ----------
+    gr.Markdown("📚 Popular Books")
+    popular_loaded_state = gr.State(df.head(len(df)))  # can shuffle or sort later
+    popular_display_state = gr.State(pd.DataFrame())
+    popular_page_state = gr.State(0)
+    popular_container = gr.HTML()
+    popular_load_btn = gr.Button("📚 Load More Popular Books")
 
     # ---------- Load more logic ----------
     def load_more(loaded_books, display_books, page_idx):
@@ -89,26 +97,31 @@ with gr.Blocks(css="""
         end = start + BOOKS_PER_LOAD
         new_books = loaded_books.iloc[start:end]
         if new_books.empty:
-            return display_books, gr.update(visible=False)
+            return display_books, gr.update(visible=False), page_idx
         combined = pd.concat([display_books, new_books], ignore_index=True)
         html = build_books_grid_html(combined)
-        return combined, gr.update(value=html, visible=True)
+        return combined, gr.update(value=html), page_idx+1
 
-    load_more_btn.click(
+    random_load_btn.click(
         load_more,
-        [loaded_books_state, display_books_state, load_index_state],
-        [display_books_state, books_container],
+        [random_loaded_state, random_display_state, random_page_state],
+        [random_display_state, random_container, random_page_state]
     )
 
-    # Initialize first load
-    def initial_load(loaded_books):
-        start = 0
-        end = BOOKS_PER_LOAD
-        initial_books = loaded_books.iloc[start:end]
-        html = build_books_grid_html(initial_books)
-        return initial_books, html, 1  # next page index
+    popular_load_btn.click(
+        load_more,
+        [popular_loaded_state, popular_display_state, popular_page_state],
+        [popular_display_state, popular_container, popular_page_state]
+    )
 
-    display_books_state.value, books_container.value, load_index_state.value = initial_load(loaded_books_state.value)
+    # ---------- Initial load ----------
+    def initial_load_random(loaded_books):
+        return load_more(loaded_books, pd.DataFrame(), 0)[:2]
+    random_display_state.value, random_container.value, random_page_state.value = initial_load_random(random_loaded_state.value)
+
+    def initial_load_popular(loaded_books):
+        return load_more(loaded_books, pd.DataFrame(), 0)[:2]
+    popular_display_state.value, popular_container.value, popular_page_state.value = initial_load_popular(popular_loaded_state.value)
 
     # ---------- Detail popup ----------
     gr.HTML("""
