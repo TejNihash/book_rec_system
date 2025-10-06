@@ -37,7 +37,7 @@ with gr.Blocks(css="""
     max-height: 500px;
     overflow-y: auto;
     margin-bottom: 10px;
-    background: #fafafa;
+    background: #f7f7f7;
 }
 .books-grid {
     display: grid;
@@ -45,7 +45,7 @@ with gr.Blocks(css="""
     gap: 12px;
 }
 .book-card {
-    background: white;
+    background: #ffffff;
     border-radius: 8px;
     padding: 6px;
     box-shadow: 0 2px 6px rgba(0,0,0,0.15);
@@ -66,12 +66,14 @@ with gr.Blocks(css="""
 }
 .book-title { font-size:12px; font-weight:bold; color:#222; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
 .book-authors { font-size:10px; color:#555; overflow:hidden; display:-webkit-box; -webkit-line-clamp:1; -webkit-box-orient:vertical; }
-#detail-overlay { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; }
-#detail-box { position:absolute; background:white; border-radius:8px; padding:12px; max-width:600px; box-shadow:0 4px 16px rgba(0,0,0,0.3); }
-#detail-close { position:absolute; top:6px; right:10px; cursor:pointer; font-size:18px; font-weight:bold; }
+
+#detail-overlay { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:1000; }
+#detail-box { position:absolute; background:#fff; border-radius:8px; padding:16px; max-width:600px; box-shadow:0 8px 20px rgba(0,0,0,0.35); color:#111; }
+#detail-close { position:absolute; top:8px; right:12px; cursor:pointer; font-size:20px; font-weight:bold; }
+#detail-content { line-height:1.5; font-size:14px; color:#222; }
 """) as demo:
 
-    gr.Markdown("# 🎲 Random Books")
+    gr.Markdown("# 🎲 Random Books Section")
 
     # Random Books State
     loaded_books_state = gr.State(df.sample(frac=1).reset_index(drop=True))
@@ -134,11 +136,11 @@ with gr.Blocks(css="""
         document.getElementById('detail-content').innerHTML = `
             <div style="display:flex;gap:16px;align-items:flex-start;">
                 <img src="${img}" style="width:220px;height:auto;border-radius:6px;object-fit:cover;">
-                <div style="max-width:340px;">
-                    <h2>${escapeHtml(title)}</h2>
-                    <p><strong>Author(s):</strong> ${escapeHtml(authors)}</p>
-                    <p><strong>Genres:</strong> ${escapeHtml(genres)}</p>
-                    <div style="margin-top:10px;line-height:1.5;color:#333;">${escapeHtml(desc)}</div>
+                <div style="max-width:340px; color:#111;">
+                    <h2 style="margin:0 0 8px 0;">${escapeHtml(title)}</h2>
+                    <p style="margin:0 0 4px 0;"><strong>Author(s):</strong> ${escapeHtml(authors)}</p>
+                    <p style="margin:0 0 6px 0;"><strong>Genres:</strong> ${escapeHtml(genres)}</p>
+                    <div style="margin-top:6px;">${escapeHtml(desc)}</div>
                 </div>
             </div>
         `;
