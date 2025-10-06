@@ -121,12 +121,13 @@ document.addEventListener('click', e=>{
     document.getElementById('detail-content').innerHTML = `
         <div style="display:flex;gap:16px;align-items:flex-start;">
             <img src="${img}" style="width:220px;height:auto;border-radius:6px;object-fit:cover;">
-            <div style="max-width:340px; color:#222;">
-                <h2 style="margin:0 0 8px 0;">${escapeHtml(title)}</h2>
-                <p style="margin:0 0 4px 0;"><strong>Author(s):</strong> ${escapeHtml(authors)}</p>
-                <p style="margin:0 0 6px 0;"><strong>Genres:</strong> ${escapeHtml(genres)}</p>
-                <div style="margin-top:6px;">${escapeHtml(desc)}</div>
+            <div style="max-width:340px;">
+                <h2 style="margin:0 0 8px 0; color:#222222;">${escapeHtml(title)}</h2>
+                <p style="margin:0 0 4px 0; color:#222222;"><strong>Author(s):</strong> ${escapeHtml(authors)}</p>
+                <p style="margin:0 0 6px 0; color:#222222;"><strong>Genres:</strong> ${escapeHtml(genres)}</p>
+                <div style="margin-top:6px; color:#222222;">${escapeHtml(desc)}</div>
             </div>
+                        
         </div>
     `;
     const rect = card.getBoundingClientRect();
