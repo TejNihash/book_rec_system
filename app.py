@@ -32,7 +32,7 @@ def create_books_grid_html(books_df):
     cards_html = "".join([create_book_card_html(row) for _, row in books_df.iterrows()])
     return f'<div class="books-grid">{cards_html}</div>'
 
-def show_book_details(book_id):
+def show_book_modal(book_id):
     book = df[df["id"]==book_id].iloc[0]
     html = f"""
     <div class="modal-content">
@@ -45,12 +45,13 @@ def show_book_details(book_id):
     """
     return gr.update(visible=True), html
 
-def load_more_books(page, books_df):
+def load_more_books(page, books_df, displayed_books):
     start = page*BOOKS_PER_LOAD
     end = start+BOOKS_PER_LOAD
-    page_books = books_df.iloc[start:end]
-    html = create_books_grid_html(page_books)
-    return gr.update(value=html), page+1
+    new_books = books_df.iloc[start:end]
+    combined_books = pd.concat([displayed_books, new_books], ignore_index=True)
+    html = create_books_grid_html(combined_books)
+    return gr.update(value=html), page+1, combined_books
 
 # ---------- Gradio App ----------
 with gr.Blocks(css="""
@@ -85,19 +86,21 @@ with gr.Blocks(css="""
     with gr.Column(elem_classes="container"):
         with gr.Row(elem_classes="section-header"):
             gr.Markdown("🎲 Random Books")
-        random_display = gr.HTML(value=create_books_grid_html(df.sample(frac=1).reset_index(drop=True).iloc[:BOOKS_PER_LOAD]))
+        random_display = gr.HTML()
         load_random_btn = gr.Button("📚 Load More Random")
-        random_page = gr.State(1)
+        random_page = gr.State(0)
         random_books_state = gr.State(df.sample(frac=1).reset_index(drop=True))
+        random_displayed_books = gr.State(pd.DataFrame())
 
     # ---------- Popular Section ----------
     with gr.Column(elem_classes="container"):
         with gr.Row(elem_classes="section-header"):
             gr.Markdown("📚 Popular Books")
-        popular_display = gr.HTML(value=create_books_grid_html(df.head(BOOKS_PER_LOAD)))
+        popular_display = gr.HTML()
         load_popular_btn = gr.Button("📚 Load More Popular")
-        popular_page = gr.State(1)
+        popular_page = gr.State(0)
         popular_books_state = gr.State(df.copy())
+        popular_displayed_books = gr.State(pd.DataFrame())
 
     # ---------- Modal ----------
     book_modal = gr.Column(visible=False, elem_classes="modal-overlay")
@@ -108,35 +111,19 @@ with gr.Blocks(css="""
         close_modal_btn
     close_modal_btn.click(lambda: gr.update(visible=False), None, book_modal)
 
-    # ---------- Callbacks ----------
+    # ---------- Load More callbacks ----------
     load_random_btn.click(load_more_books,
-                          inputs=[random_page, random_books_state],
-                          outputs=[random_display, random_page])
+                          inputs=[random_page, random_books_state, random_displayed_books],
+                          outputs=[random_display, random_page, random_displayed_books])
     load_popular_btn.click(load_more_books,
-                           inputs=[popular_page, popular_books_state],
-                           outputs=[popular_display, popular_page])
+                           inputs=[popular_page, popular_books_state, popular_displayed_books],
+                           outputs=[popular_display, popular_page, popular_displayed_books])
 
-    # ---------- JS click handler for cards ----------
-    js_click_handler = """
-    <script>
-    document.addEventListener('click', function(e){
-        let card = e.target.closest('.book-card');
-        if(card){
-            let book_id = card.getAttribute('data-id');
-            if(book_id){
-                document.querySelector('.modal-overlay').style.display = 'flex';
-                let modalContent = document.querySelector('.modal-content');
-                modalContent.innerHTML = `
-                    <img src="${card.querySelector('img').src}" style="width:200px;height:auto;border-radius:6px;margin-bottom:10px;">
-                    <h2>${card.querySelector('.title').innerText}</h2>
-                    <p><em>${card.querySelector('.authors').innerText}</em></p>
-                    <p><strong>Genres:</strong> ${card.querySelector('.genres').innerText}</p>
-                `;
-            }
-        }
-    });
-    </script>
-    """
-    gr.HTML(js_click_handler)
+    # ---------- Card click callback ----------
+    def on_card_click(book_id):
+        return show_book_modal(book_id)
+
+    random_display.click(on_card_click, inputs=[gr.Textbox(value="")], outputs=[book_modal, book_detail_html])
+    popular_display.click(on_card_click, inputs=[gr.Textbox(value="")], outputs=[book_modal, book_detail_html])
 
 demo.launch()
