@@ -1,313 +1,142 @@
 import ast
 import pandas as pd
 import gradio as gr
-from gradio_modal import Modal
 import random
 
-# Load dataset
+# ---------- Load dataset ----------
 df = pd.read_csv("data_mini_books.csv")
-
-# Convert string lists to Python lists
-df["authors"] = df["authors"].apply(lambda x: ast.literal_eval(x) if isinstance(x, str) else x)
-df["genres"] = df["genres"].apply(lambda x: ast.literal_eval(x) if isinstance(x, str) else x)
-
-# Create searchable columns
-df["title_lower"] = df["title"].str.lower()
-df["authors_lower"] = df["authors"].apply(lambda lst: [a.lower() for a in lst])
-df["genres_lower"] = df["genres"].apply(lambda lst: [g.lower() for g in lst])
-
-# Add ID column
 if "id" not in df.columns:
     df["id"] = df.index.astype(str)
 
-# Simple settings
-BOOKS_PER_LOAD = 12
+df["authors"] = df["authors"].apply(lambda x: ast.literal_eval(x) if isinstance(x, str) else x)
+df["genres"] = df["genres"].apply(lambda x: ast.literal_eval(x) if isinstance(x, str) else x)
 
-def search_books(query, page=0):
-    """Search books with pagination"""
-    query = query.strip().lower()
-    
-    if query:
-        mask_title = df["title_lower"].str.contains(query, na=False)
-        mask_authors = df["authors_lower"].apply(lambda lst: any(query in a for a in lst))
-        mask_genres = df["genres_lower"].apply(lambda lst: any(query in g for g in lst))
-        filtered = df[mask_title | mask_authors | mask_genres]
-    else:
-        filtered = df.copy().sample(frac=1).reset_index(drop=True)
-    
-    start_idx = page * BOOKS_PER_LOAD
-    end_idx = start_idx + BOOKS_PER_LOAD
-    page_books = filtered.iloc[start_idx:end_idx]
-    
-    has_more = len(filtered) > end_idx
-    return page_books, has_more
+BOOKS_PER_LOAD = 6
 
-def get_popular_books(page=0):
-    """Get popular books with pagination"""
-    start_idx = page * BOOKS_PER_LOAD
-    end_idx = start_idx + BOOKS_PER_LOAD
-    page_books = df.iloc[start_idx:end_idx]
-    
-    has_more = len(df) > end_idx
-    return page_books, has_more
+# ---------- Helper functions ----------
+def create_book_card_html(book):
+    return f"""
+    <div class="book-card" data-id="{book['id']}">
+        <img src="{book['image_url']}" onerror="this.src='https://via.placeholder.com/150x220?text=No+Image'">
+        <div class="book-info">
+            <div class="title">{book['title']}</div>
+            <div class="authors">{', '.join(book['authors'])}</div>
+            <div class="genres">{', '.join(book['genres'][:2])}</div>
+        </div>
+    </div>
+    """
 
-def create_book_button(book_row):
-    """Create a book button with proper styling"""
-    title = book_row["title"]
-    # Shorten long titles
-    if len(title) > 30:
-        title = title[:27] + "..."
-    return gr.Button(title, elem_classes="book-btn"), book_row["id"]
-
-def create_books_section(books_df, section_name):
-    """Create a section with book buttons"""
+def create_books_grid_html(books_df):
     if books_df.empty:
-        return gr.Column(), []
-    
-    buttons = []
-    with gr.Column() as section:
-        for _, row in books_df.iterrows():
-            btn, book_id = create_book_button(row)
-            buttons.append((btn, book_id))
-    
-    return section, buttons
+        return '<div class="no-books">No books found</div>'
+    cards_html = "".join([create_book_card_html(row) for _, row in books_df.iterrows()])
+    return f'<div class="books-grid">{cards_html}</div>'
 
 def show_book_details(book_id):
-    """Show book details in modal - using your working approach"""
-    book = df[df["id"] == book_id].iloc[0]
-    
-    # Get additional details if available
-    year = book.get("published_year", "Unknown")
-    rating = book.get("average_rating", "Not rated")
-    pages = book.get("num_pages", "Unknown")
-    
+    book = df[df["id"]==book_id].iloc[0]
     html = f"""
-    <div style="max-width: 600px; max-height: 80vh; overflow-y: auto; padding: 20px;">
-        <div style="text-align: center; margin-bottom: 20px;">
-            <img src="{book['image_url']}" style="width:200px; height:auto; border-radius:8px; margin-bottom:15px;"
-                 onerror="this.src='https://via.placeholder.com/200x300/667eea/white?text=No+Image'">
-            <h2 style="margin: 10px 0; color: #2c3e50;">{book['title']}</h2>
-            <h4 style="margin: 5px 0; color: #666;">by {', '.join(book['authors'])}</h4>
-        </div>
-        
-        <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
-            <p style="margin: 5px 0;"><strong>Genres:</strong> {', '.join(book['genres'])}</p>
-            <p style="margin: 5px 0;"><strong>Published:</strong> {year}</p>
-            <p style="margin: 5px 0;"><strong>Rating:</strong> {rating}</p>
-            <p style="margin: 5px 0;"><strong>Pages:</strong> {pages}</p>
-        </div>
-        
-        <div>
-            <h4 style="margin: 0 0 10px 0; color: #2c3e50;">Description</h4>
-            <p style="line-height: 1.6; color: #555;">{book.get('description', 'No description available.')}</p>
-        </div>
+    <div class="modal-content">
+        <img src="{book['image_url']}" style="width:200px;height:auto;border-radius:6px;margin-bottom:10px;">
+        <h2>{book['title']}</h2>
+        <p><em>{', '.join(book['authors'])}</em></p>
+        <p><strong>Genres:</strong> {', '.join(book['genres'])}</p>
+        <p>{book.get('description','No description available.')}</p>
     </div>
     """
     return gr.update(visible=True), html
 
-# State management
-random_loaded_books = gr.State(pd.DataFrame())
-popular_loaded_books = gr.State(pd.DataFrame())
+def load_more_books(page, books_df):
+    start = page*BOOKS_PER_LOAD
+    end = start+BOOKS_PER_LOAD
+    page_books = books_df.iloc[start:end]
+    html = create_books_grid_html(page_books)
+    return gr.update(value=html), page+1
 
-def initial_state(query=""):
-    """Initialize or reset the application state"""
-    random_books, random_has_more = search_books(query, 0)
-    popular_books, popular_has_more = get_popular_books(0)
-    
-    if query:
-        results_text = f"🎲 Showing results for '{query}'"
-    else:
-        results_text = "🎲 Discover Random Books"
-    
-    return (
-        random_books, popular_books,
-        1, 1,
-        gr.update(visible=random_has_more), 
-        gr.update(visible=popular_has_more),
-        results_text,
-        random_books,
-        popular_books
-    )
-
-def load_more_random(query, current_page, current_books_df):
-    new_books, has_more = search_books(query, current_page)
-    
-    if not new_books.empty:
-        combined_books = pd.concat([current_books_df, new_books], ignore_index=True)
-        return combined_books, current_page + 1, gr.update(visible=has_more), combined_books
-    else:
-        return current_books_df, current_page, gr.update(visible=False), current_books_df
-
-def load_more_popular(current_page, current_books_df):
-    new_books, has_more = get_popular_books(current_page)
-    
-    if not new_books.empty:
-        combined_books = pd.concat([current_books_df, new_books], ignore_index=True)
-        return combined_books, current_page + 1, gr.update(visible=has_more), combined_books
-    else:
-        return current_books_df, current_page, gr.update(visible=False), current_books_df
-
-def refresh_random(query):
-    random_books, random_has_more = search_books(query, 0)
-    return random_books, 1, gr.update(visible=random_has_more), random_books
-
-def clear_search():
-    return "", *initial_state("")
-
-# Build the interface
+# ---------- Gradio App ----------
 with gr.Blocks(css="""
-    .container {
-        border: 1px solid #e0e0e0;
-        border-radius: 12px;
-        padding: 20px;
-        margin: 20px 0;
-        background: white;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    }
-    .books-container {
-        max-height: 500px;
-        overflow-y: auto;
-        padding: 15px;
-        background: #fafafa;
-        border-radius: 8px;
-        border: 1px solid #f0f0f0;
-        margin-bottom: 15px;
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-    }
-    .book-btn {
-        width: 150px !important;
-        height: 60px !important;
-        padding: 8px !important;
-        font-size: 12px !important;
-        line-height: 1.2 !important;
-        white-space: normal !important;
-        word-wrap: break-word !important;
-        text-align: center !important;
-    }
-    .section-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 15px;
-    }
-    .load-more-btn {
-        display: flex;
-        justify-content: center;
-        margin-top: 10px;
-    }
-    .search-row {
-        margin-bottom: 20px;
-    }
+    .container { border: 1px solid #e0e0e0; border-radius: 12px; padding: 20px; margin: 20px 0;
+        background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    .books-container { max-height: 500px; overflow-y: auto; padding: 15px; background: #fafafa;
+        border-radius: 8px; border: 1px solid #f0f0f0; margin-bottom: 15px; }
+    .books-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 15px; }
+    .book-card { background: white; border-radius: 8px; padding: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        text-align: center; height: 280px; display: flex; flex-direction: column; transition: all 0.3s ease; cursor:pointer; }
+    .book-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.15); }
+    .book-card img { width: 100%; height: 160px; object-fit: cover; border-radius: 4px; margin-bottom: 8px; }
+    .book-info { flex: 1; display: flex; flex-direction: column; justify-content: space-between; }
+    .title { font-weight: bold; font-size: 12px; line-height: 1.3; margin-bottom: 4px; color: #2c3e50;
+        display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .authors { font-size: 10px; color: #666; margin-bottom: 3px; display: -webkit-box; -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical; overflow: hidden; }
+    .genres { font-size: 9px; color: #888; font-style: italic; display: -webkit-box; -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical; overflow: hidden; }
+    .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+    .section-title { font-size: 18px; font-weight: bold; color: #2c3e50; }
+    .load-more-btn { display: flex; justify-content: center; margin-top: 10px; }
+    .no-books { text-align: center; padding: 40px; color: #666; font-style: italic; }
+    .modal-overlay { background: rgba(0,0,0,0.5); position: fixed; top:0; left:0; right:0; bottom:0;
+        display:flex; align-items:center; justify-content:center; z-index:9999; }
+    .modal-content { max-width: 800px; max-height: 80vh; overflow-y: auto; background:white; padding:20px; border-radius:10px; }
 """) as demo:
 
     gr.Markdown("# 📚 Book Explorer")
-    
-    # Book Details Modal
-    with Modal("📖 Book Details", visible=False) as modal:
-        book_details_html = gr.HTML()
-        close_btn = gr.Button("Close", variant="secondary")
-    
-    with gr.Row(elem_classes="search-row"):
-        search_box = gr.Textbox(
-            label="",
-            placeholder="🔍 Search books by title, author, or genre...",
-            scale=4
-        )
-        clear_btn = gr.Button("Clear", scale=1)
-    
-    # Random Books Section
-    with gr.Column(elem_classes="container") as random_section:
+
+    # ---------- Random Section ----------
+    with gr.Column(elem_classes="container"):
         with gr.Row(elem_classes="section-header"):
-            random_title = gr.Markdown()
-            refresh_btn = gr.Button("🔄 Refresh")
-        
-        random_display = gr.Column(elem_classes="books-container")
-        
-        with gr.Row(elem_classes="load-more-btn"):
-            load_random_btn = gr.Button("📚 Load More Books", visible=True)
-            random_page = gr.State(1)
-            random_loaded_books = gr.State(pd.DataFrame())
-    
-    # Popular Books Section  
-    with gr.Column(elem_classes="container") as popular_section:
+            gr.Markdown("🎲 Random Books")
+        random_display = gr.HTML(value=create_books_grid_html(df.sample(frac=1).reset_index(drop=True).iloc[:BOOKS_PER_LOAD]))
+        load_random_btn = gr.Button("📚 Load More Random")
+        random_page = gr.State(1)
+        random_books_state = gr.State(df.sample(frac=1).reset_index(drop=True))
+
+    # ---------- Popular Section ----------
+    with gr.Column(elem_classes="container"):
         with gr.Row(elem_classes="section-header"):
             gr.Markdown("📚 Popular Books")
-        
-        popular_display = gr.Column(elem_classes="books-container")
-        
-        with gr.Row(elem_classes="load-more-btn"):
-            load_popular_btn = gr.Button("📚 Load More Books", visible=True)
-            popular_page = gr.State(1)
-            popular_loaded_books = gr.State(pd.DataFrame())
+        popular_display = gr.HTML(value=create_books_grid_html(df.head(BOOKS_PER_LOAD)))
+        load_popular_btn = gr.Button("📚 Load More Popular")
+        popular_page = gr.State(1)
+        popular_books_state = gr.State(df.copy())
 
-    # Store button references
-    random_buttons_ref = gr.State([])
-    popular_buttons_ref = gr.State([])
+    # ---------- Modal ----------
+    book_modal = gr.Column(visible=False, elem_classes="modal-overlay")
+    book_detail_html = gr.HTML()
+    close_modal_btn = gr.Button("❌ Close")
+    with book_modal:
+        book_detail_html
+        close_modal_btn
+    close_modal_btn.click(lambda: gr.update(visible=False), None, book_modal)
 
-    def update_random_display(random_books):
-        """Update random books display with buttons"""
-        with random_display:
-            random_display.__init__()  # Clear previous content
-            buttons = []
-            for _, row in random_books.iterrows():
-                btn, book_id = create_book_button(row)
-                buttons.append((btn, book_id))
-            return buttons
+    # ---------- Callbacks ----------
+    load_random_btn.click(load_more_books,
+                          inputs=[random_page, random_books_state],
+                          outputs=[random_display, random_page])
+    load_popular_btn.click(load_more_books,
+                           inputs=[popular_page, popular_books_state],
+                           outputs=[popular_display, popular_page])
 
-    def update_popular_display(popular_books):
-        """Update popular books display with buttons"""
-        with popular_display:
-            popular_display.__init__()  # Clear previous content
-            buttons = []
-            for _, row in popular_books.iterrows():
-                btn, book_id = create_book_button(row)
-                buttons.append((btn, book_id))
-            return buttons
-
-    # Event handlers
-    def handle_search(query):
-        random_books, popular_books, r_page, p_page, r_has_more, p_has_more, r_title, r_loaded, p_loaded = initial_state(query)
-        random_buttons = update_random_display(random_books)
-        popular_buttons = update_popular_display(popular_books)
-        return random_buttons, popular_buttons, r_page, p_page, r_has_more, p_has_more, r_title, r_loaded, p_loaded
-
-    search_box.submit(
-        handle_search,
-        [search_box],
-        [random_buttons_ref, popular_buttons_ref, random_page, popular_page, load_random_btn, load_popular_btn, random_title, random_loaded_books, popular_loaded_books]
-    )
-    
-    # Connect buttons to modal
-    def connect_buttons(buttons, buttons_ref):
-        """Connect all buttons to show modal"""
-        for btn, book_id in buttons:
-            btn.click(
-                show_book_details,
-                inputs=[gr.State(book_id)],
-                outputs=[modal, book_details_html]
-            )
-        return buttons
-
-    # Close modal
-    close_btn.click(
-        lambda: gr.update(visible=False),
-        None,
-        [modal]
-    )
-
-    # Initial load
-    def load_initial():
-        random_books, popular_books, r_page, p_page, r_has_more, p_has_more, r_title, r_loaded, p_loaded = initial_state()
-        random_buttons = update_random_display(random_books)
-        popular_buttons = update_popular_display(popular_books)
-        return random_buttons, popular_buttons, r_page, p_page, r_has_more, p_has_more, r_title, r_loaded, p_loaded
-
-    demo.load(
-        load_initial,
-        [],
-        [random_buttons_ref, popular_buttons_ref, random_page, popular_page, load_random_btn, load_popular_btn, random_title, random_loaded_books, popular_loaded_books]
-    )
+    # ---------- JS click handler for cards ----------
+    js_click_handler = """
+    <script>
+    document.addEventListener('click', function(e){
+        let card = e.target.closest('.book-card');
+        if(card){
+            let book_id = card.getAttribute('data-id');
+            if(book_id){
+                document.querySelector('.modal-overlay').style.display = 'flex';
+                let modalContent = document.querySelector('.modal-content');
+                modalContent.innerHTML = `
+                    <img src="${card.querySelector('img').src}" style="width:200px;height:auto;border-radius:6px;margin-bottom:10px;">
+                    <h2>${card.querySelector('.title').innerText}</h2>
+                    <p><em>${card.querySelector('.authors').innerText}</em></p>
+                    <p><strong>Genres:</strong> ${card.querySelector('.genres').innerText}</p>
+                `;
+            }
+        }
+    });
+    </script>
+    """
+    gr.HTML(js_click_handler)
 
 demo.launch()
