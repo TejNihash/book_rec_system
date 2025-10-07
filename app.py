@@ -211,32 +211,41 @@ with gr.Blocks(css="""
         </div>
     </div>
 
+
     <script>
     const overlay = document.getElementById('detail-overlay');
     const box = document.getElementById('detail-box');
     const closeBtn = document.getElementById('detail-close');
     let scrollPos = 0;
 
-    function escapeHtml(str){return str?String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;'):"";}
-    function formatText(text) { return text ? text.replace(/\\n/g,'<br>') : 'No description available.'; }
-
+    function escapeHtml(str){
+        return str
+            ? String(str)
+                .replace(/&/g,'&amp;')
+                .replace(/</g,'&lt;')
+                .replace(/>/g,'&gt;')
+                .replace(/"/g,'&quot;')
+                .replace(/'/g,'&#039;')
+            : "";
+    }
+    function formatText(text) { 
+        return text ? text.replace(/\\n/g,'<br>') : 'No description available.'; 
+    }
+    
+    // ✅ Updated scroll logic — no layout shift
     function disableScroll() {
         scrollPos = window.scrollY;
-        document.body.style.position = 'fixed';
-        document.body.style.top = `-${scrollPos}px`;
-        document.body.style.left = '0';
-        document.body.style.right = '0';
+        document.body.style.overflow = 'hidden';
     }
     function enableScroll() {
-        document.body.style.position = '';
-        document.body.style.top = '';
+        document.body.style.overflow = '';
         window.scrollTo(0, scrollPos);
     }
-
+    
     document.addEventListener('click', e => {
         const card = e.target.closest('.book-card');
         if(!card) return;
-
+    
         const title = card.dataset.title;
         const authors = card.dataset.authors;
         const genres = card.dataset.genres;
@@ -245,14 +254,14 @@ with gr.Blocks(css="""
         const rating = card.dataset.rating || '0';
         const year = card.dataset.year || 'N/A';
         const pages = card.dataset.pages || 'N/A';
-
+    
         const numRating = parseFloat(rating);
         const fullStars = Math.floor(numRating);
         const hasHalfStar = numRating % 1 >= 0.5;
         let stars = '⭐'.repeat(fullStars);
         if(hasHalfStar) stars += '½';
         stars += '☆'.repeat(5 - fullStars - (hasHalfStar ? 1 : 0));
-
+    
         document.getElementById('detail-content').innerHTML = `
             <div style="display:flex;gap:20px;align-items:flex-start;margin-bottom:20px;">
                 <img src="${img}" style="width:200px;height:auto;border-radius:8px;object-fit:cover;box-shadow:0 4px 12px rgba(0,0,0,0.2);">
@@ -284,21 +293,26 @@ with gr.Blocks(css="""
                 </div>
             </div>
         `;
-
+    
         overlay.style.display = 'block';
         disableScroll();
         box.focus();
     });
-
+    
     function closePopup() {
         overlay.style.display = 'none';
         enableScroll();
     }
-
+    
     closeBtn.addEventListener('click', closePopup);
     overlay.addEventListener('click', e => { if(e.target===overlay) closePopup(); });
     document.addEventListener('keydown', e => { if(e.key==='Escape') closePopup(); });
     </script>
+
+
+
+
+
     """)
 
 demo.launch()
