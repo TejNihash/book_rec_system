@@ -90,56 +90,81 @@ with gr.Blocks(css="""
         <div id="floating-portal-content"></div>
     </div>
 
+    
     <script>
     (function(){
-        const portal = document.getElementById('floating-portal-popup');
-        const content = portal.querySelector('#floating-portal-content');
-        const closeBtn = portal.querySelector('#floating-portal-close');
-        let lastScrollY = 0;
-
-        function showPopup(html) {
-            content.innerHTML = html;
-            portal.style.opacity='1';
-            portal.style.transform='translate(-50%,-50%) scale(1)';
-            document.body.style.overflow='hidden';
+        let portal = document.createElement('div');
+        portal.id = 'card-details-popup';
+        portal.style.cssText = `
+            position:absolute;
+            background:#111;
+            color:#eee;
+            padding:16px;
+            border-radius:12px;
+            box-shadow:0 10px 30px rgba(0,0,0,0.7);
+            max-width:300px;
+            z-index:9999;
+            display:none;
+        `;
+        document.body.appendChild(portal);
+    
+        const content = document.createElement('div');
+        portal.appendChild(content);
+    
+        // Close button
+        const closeBtn = document.createElement('span');
+        closeBtn.innerHTML = '&times;';
+        closeBtn.style.cssText = 'position:absolute; top:6px; right:8px; cursor:pointer; font-weight:bold;';
+        portal.appendChild(closeBtn);
+    
+        function showPopup(card){
+            const rect = card.getBoundingClientRect();
+            content.innerHTML = `
+                <h3>${card.dataset.title}</h3>
+                <p><strong>Author(s):</strong> ${card.dataset.authors}</p>
+                <p><strong>Genres:</strong> ${card.dataset.genres}</p>
+                <p><strong>Rating:</strong> ${card.dataset.rating}</p>
+                <p><strong>Year:</strong> ${card.dataset.year}</p>
+                <p><strong>Pages:</strong> ${card.dataset.pages}</p>
+                <div class="description-scroll" style="max-height:150px; overflow:auto; border:1px solid #444; padding:4px;">${card.dataset.desc}</div>
+            `;
+            // Position: right if fits, else left
+            let top = window.scrollY + rect.top;
+            let left = window.scrollX + rect.right + 10; 
+            if(left + 300 > window.innerWidth){
+                left = window.scrollX + rect.left - 310;
+            }
+            portal.style.top = top + 'px';
+            portal.style.left = left + 'px';
+            portal.style.display = 'block';
         }
-
+    
         function closePopup(){
-            portal.style.opacity='0';
-            portal.style.transform='translate(-50%,-50%) scale(0.8)';
-            document.body.style.overflow='auto';
-            window.scrollTo({top:lastScrollY, behavior:'auto'});
-            setTimeout(()=>content.innerHTML='',300);
+            portal.style.display = 'none';
         }
-
+    
         closeBtn.addEventListener('click', closePopup);
-        document.addEventListener('keydown', e=>{ if(e.key==='Escape') closePopup(); });
-        portal.addEventListener('click', e=>e.stopPropagation());
-
+        document.addEventListener('click', e=>{
+            if(!e.target.closest('.book-card') && !e.target.closest('#card-details-popup')){
+                closePopup();
+            }
+        });
+        document.addEventListener('keydown', e=>{
+            if(e.key==='Escape') closePopup();
+        });
+    
+        // Event delegation for book cards
         document.addEventListener('click', function(e){
             const card = e.target.closest('.book-card');
             if(!card) return;
-
-            lastScrollY = window.scrollY || window.pageYOffset;
-
-            const html = `
-                <div style="display:flex; gap:20px; align-items:flex-start; margin-bottom:20px;">
-                    <img src="${card.dataset.img}" style="width:180px; height:auto; border-radius:8px; object-fit:cover;">
-                    <div style="flex:1;">
-                        <h2>${card.dataset.title}</h2>
-                        <p><strong>Author(s):</strong> ${card.dataset.authors}</p>
-                        <p><strong>Genres:</strong> ${card.dataset.genres}</p>
-                        <p><strong>Rating:</strong> ${card.dataset.rating}</p>
-                        <p><strong>Year:</strong> ${card.dataset.year}</p>
-                        <p><strong>Pages:</strong> ${card.dataset.pages}</p>
-                        <div class="description-scroll">${card.dataset.desc}</div>
-                    </div>
-                </div>
-            `;
-            showPopup(html);
+            showPopup(card);
         });
+    
     })();
     </script>
+    
+
+
     """)
 
     # ---------- Random Books ----------
