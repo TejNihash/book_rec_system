@@ -245,7 +245,7 @@ with gr.Blocks(css="""
 
     display_books_state.value, books_container.value, stats_html.value, load_index_state.value = initial_load(loaded_books_state.value)
 
-    # ---------- Enhanced Detail Popup with Scroll Awareness & Scrollable Description ----------
+# ---------- Fixed Detail Popup with True Screen Centering ----------
     gr.HTML("""
     <div id="detail-overlay">
         <div id="detail-box">
@@ -257,14 +257,14 @@ with gr.Blocks(css="""
     const overlay = document.getElementById('detail-overlay');
     const box = document.getElementById('detail-box');
     const closeBtn = document.getElementById('detail-close');
-
+    
     function escapeHtml(str){return str?String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;'):"";}
-
+    
     function formatText(text) {
         if (!text) return 'No description available.';
         return text.replace(/\\n/g, '<br>');
     }
-
+    
     document.addEventListener('click', e=>{
         const card = e.target.closest('.book-card');
         if(!card) return;
@@ -318,31 +318,21 @@ with gr.Blocks(css="""
             </div>
         `;
         
-        // Get current scroll position and center the popup in the visible area
-        const scrollY = window.scrollY || window.pageYOffset;
-        const viewportHeight = window.innerHeight;
-        const boxHeight = box.offsetHeight;
-        
-        // Position the box centered vertically in the viewport, considering current scroll
-        const topPosition = scrollY + (viewportHeight / 2) - (boxHeight / 2);
-        
-        // Ensure the popup stays within viewport bounds
-        const boundedTop = Math.max(scrollY + 20, Math.min(topPosition, scrollY + viewportHeight - boxHeight - 20));
-        
+        // SIMPLE FIX: Always center in the viewport regardless of scroll position
         box.style.left = '50%';
-        box.style.top = boundedTop + 'px';
-        box.style.transform = 'translateX(-50%)';
+        box.style.top = '50%';
+        box.style.transform = 'translate(-50%, -50%)';
         overlay.style.display = 'block';
         
         // Prevent background scrolling when popup is open
         document.body.style.overflow = 'hidden';
     });
-
+    
     function closePopup() {
         overlay.style.display = 'none';
         document.body.style.overflow = 'auto'; // Restore scrolling
     }
-
+    
     closeBtn.addEventListener('click', closePopup);
     overlay.addEventListener('click', e=>{
         if(e.target===overlay) closePopup();
@@ -352,5 +342,4 @@ with gr.Blocks(css="""
     });
     </script>
     """)
-
 demo.launch()
