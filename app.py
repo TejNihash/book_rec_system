@@ -283,12 +283,6 @@ with gr.Blocks(css="""
         [favorite_trigger, random_books_state, favorites_state],
         [favorites_container, favorites_state]
     )
-    # Connect JS custom event to Gradio via JS listener
-    demo.load(lambda: None, [], [], _js="""
-        document.addEventListener('add-to-favorites', e=>{
-            const book_id = e.detail.book_id;
-            gradioApp().querySelectorAll('gradio-block')[0].__call__(book_id, null, null);
-        });
-    """)
+
 
 demo.launch()
