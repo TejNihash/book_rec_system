@@ -407,84 +407,84 @@ with gr.Blocks(css="""
 
     
 
-    <script>
-    let lastScrollY = 0;
-    
-    const overlay = document.getElementById('popup-overlay');
-    const container = document.getElementById('popup-container');
-    const closeBtn = document.getElementById('popup-close');
-    const content = document.getElementById('popup-content');
-    
-    function escapeHtml(str) {
-        return str ? String(str)
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#039;') : "";
-    }
-    
-    document.addEventListener('click', function(e){
-        const card = e.target.closest('.book-card');
-        if(!card) return;
-    
-        // Save current scroll position
-        lastScrollY = window.scrollY || window.pageYOffset;
-    
-        const title = card.dataset.title;
-        const authors = card.dataset.authors;
-        const genres = card.dataset.genres;
-        const desc = card.dataset.desc;
-        const img = card.dataset.img;
-        const rating = card.dataset.rating || '0';
-        const year = card.dataset.year || 'N/A';
-        const pages = card.dataset.pages || 'N/A';
-    
-        const numRating = parseFloat(rating);
-        const fullStars = Math.floor(numRating);
-        const hasHalfStar = numRating % 1 >= 0.5;
-        let stars = '⭐'.repeat(fullStars);
-        if(hasHalfStar) stars += '½';
-        stars += '☆'.repeat(5 - fullStars - (hasHalfStar ? 1 : 0));
-    
-        // Fill popup content
-        content.innerHTML = `
-            <div style="display:flex; gap:20px; align-items:flex-start; margin-bottom:20px;">
-                <img src="${img}" style="width:180px; height:auto; border-radius:8px; object-fit:cover;">
-                <div style="flex:1; color:#222;">
-                    <h2 style="margin:0 0 12px 0; border-bottom:2px solid #667eea; padding-bottom:8px;">${escapeHtml(title)}</h2>
-                    <p><strong>Author(s):</strong> <span style="color:#667eea;">${escapeHtml(authors)}</span></p>
-                    <p><strong>Genres:</strong> <span style="color:#764ba2;">${escapeHtml(genres)}</span></p>
-                    <p><strong>Rating:</strong> ${stars} <strong style="color:#667eea;">${parseFloat(rating).toFixed(1)}</strong></p>
-                </div>
+<script>
+let lastScrollY = 0;
+
+const overlay = document.getElementById('popup-overlay');
+const container = document.getElementById('popup-container');
+const closeBtn = document.getElementById('popup-close');
+const content = document.getElementById('popup-content');
+
+function escapeHtml(str) {
+    return str ? String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;') : "";
+}
+
+document.addEventListener('click', function(e){
+    const card = e.target.closest('.book-card');
+    if(!card) return;
+
+    // Save current scroll position
+    lastScrollY = window.scrollY || window.pageYOffset;
+
+    const title = card.dataset.title;
+    const authors = card.dataset.authors;
+    const genres = card.dataset.genres;
+    const desc = card.dataset.desc;
+    const img = card.dataset.img;
+    const rating = card.dataset.rating || '0';
+    const year = card.dataset.year || 'N/A';
+    const pages = card.dataset.pages || 'N/A';
+
+    const numRating = parseFloat(rating);
+    const fullStars = Math.floor(numRating);
+    const hasHalfStar = numRating % 1 >= 0.5;
+    let stars = '⭐'.repeat(fullStars);
+    if(hasHalfStar) stars += '½';
+    stars += '☆'.repeat(5 - fullStars - (hasHalfStar ? 1 : 0));
+
+    // Fill popup content
+    content.innerHTML = `
+        <div style="display:flex; gap:20px; align-items:flex-start; margin-bottom:20px;">
+            <img src="${img}" style="width:180px; height:auto; border-radius:8px; object-fit:cover;">
+            <div style="flex:1; color:#222;">
+                <h2 style="margin:0 0 12px 0; border-bottom:2px solid #667eea; padding-bottom:8px;">${escapeHtml(title)}</h2>
+                <p><strong>Author(s):</strong> <span style="color:#667eea;">${escapeHtml(authors)}</span></p>
+                <p><strong>Genres:</strong> <span style="color:#764ba2;">${escapeHtml(genres)}</span></p>
+                <p><strong>Rating:</strong> ${stars} <strong style="color:#667eea;">${parseFloat(rating).toFixed(1)}</strong></p>
             </div>
-            <div class="description-scroll">${escapeHtml(desc).replace(/\n/g,'<br>')}</div>
-        `;
-    
-        // Show popup
-        overlay.style.display = 'block';
-        container.style.display = 'block';
-    
-        // Optional: prevent page scroll while popup is open
-        document.body.style.overflow = 'hidden';
-    });
-    
-    // Close popup and restore scroll
-    function closePopup(){
-        overlay.style.display = 'none';
-        container.style.display = 'none';
-    
-        document.body.style.overflow = 'auto';
-    
-        // Restore scroll position
-        window.scrollTo({ top: lastScrollY, behavior: 'auto' });
-    }
-    
-    closeBtn.addEventListener('click', closePopup);
-    overlay.addEventListener('click', closePopup);
-    document.addEventListener('keydown', e => { if(e.key==='Escape') closePopup(); });
-    container.addEventListener('click', e => e.stopPropagation());
-    </script>
+        </div>
+        <div class="description-scroll">${escapeHtml(desc).replace(/\n/g,'<br>')}</div>
+    `;
+
+    // Show popup
+    overlay.style.display = 'block';
+    container.style.display = 'block';
+
+    // Optional: prevent page scroll while popup is open
+    document.body.style.overflow = 'hidden';
+});
+
+// Close popup and restore scroll
+function closePopup(){
+    overlay.style.display = 'none';
+    container.style.display = 'none';
+
+    document.body.style.overflow = 'auto';
+
+    // Restore scroll position
+    window.scrollTo({ top: lastScrollY, behavior: 'auto' });
+}
+
+closeBtn.addEventListener('click', closePopup);
+overlay.addEventListener('click', closePopup);
+document.addEventListener('keydown', e => { if(e.key==='Escape') closePopup(); });
+container.addEventListener('click', e => e.stopPropagation());
+</script>
 
 
 
