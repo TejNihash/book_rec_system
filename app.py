@@ -135,31 +135,35 @@ with gr.Blocks(css="""
 }
 """) as demo:
 
+    # ---------- Inside your gr.Blocks(...) ----------
     gr.Markdown("# 📚 Book Discovery Hub")
     gr.Markdown("### Explore our curated collection of amazing books")
-
-    # ---------- Random Books ----------
+    
+    # ---------- Random Books Section ----------
     gr.Markdown("## 🔀 Random Books")
     random_books_state = gr.State(df.sample(frac=1).reset_index(drop=True))
     random_display_state = gr.State(pd.DataFrame())
     random_load_index = gr.State(0)
-    random_container = gr.HTML()
-
+    
+    # Wrap in a fixed-height scrollable box
+    random_container = gr.HTML("""<div class="books-section" id="random-books-container"></div>""")
+    
     with gr.Row():
         random_load_btn = gr.Button("📚 Load More", elem_classes="load-more-btn")
         random_shuffle_btn = gr.Button("🔀 Shuffle", elem_classes="shuffle-btn")
 
-    # ---------- Popular Books ----------
+    # ---------- Popular Books Section ----------
     gr.Markdown("## ⭐ Popular Books")
     popular_books_state = gr.State(df.sort_values("rating", ascending=False).reset_index(drop=True))
     popular_display_state = gr.State(pd.DataFrame())
     popular_load_index = gr.State(0)
-    popular_container = gr.HTML()
-
+    
+    popular_container = gr.HTML("""<div class="books-section" id="popular-books-container"></div>""")
+    
     with gr.Row():
         popular_load_btn = gr.Button("📚 Load More", elem_classes="load-more-btn")
-
-    # ---------- Functions ----------
+    
+    # ---------- Load More / Shuffle Functions ----------
     def load_more(loaded_books, display_books, page_idx):
         start = page_idx * BOOKS_PER_LOAD
         end = start + BOOKS_PER_LOAD
@@ -169,16 +173,16 @@ with gr.Blocks(css="""
         combined = pd.concat([display_books, new_books], ignore_index=True)
         html = build_books_grid_html(combined)
         return combined, gr.update(value=html), gr.update(visible=True), page_idx + 1
-
+    
     def shuffle_books(loaded_books, display_books):
         shuffled = loaded_books.sample(frac=1).reset_index(drop=True)
         initial_books = shuffled.iloc[:BOOKS_PER_LOAD]
         html = build_books_grid_html(initial_books)
         return shuffled, initial_books, html, 1
-
-    # Event handlers
+    
+    # ---------- Event Handlers ----------
     random_load_btn.click(
-        load_more, 
+        load_more,
         [random_books_state, random_display_state, random_load_index],
         [random_display_state, random_container, random_load_btn, random_load_index]
     )
@@ -187,20 +191,24 @@ with gr.Blocks(css="""
         [random_books_state, random_display_state],
         [random_books_state, random_display_state, random_container, random_load_index]
     )
+    
     popular_load_btn.click(
         load_more,
         [popular_books_state, popular_display_state, popular_load_index],
         [popular_display_state, popular_container, popular_load_btn, popular_load_index]
     )
-
+    
     # Initialize first load
     def initial_load(loaded_books):
         initial_books = loaded_books.iloc[:BOOKS_PER_LOAD]
         html = build_books_grid_html(initial_books)
         return initial_books, html, 1
-
+    
     random_display_state.value, random_container.value, random_load_index.value = initial_load(random_books_state.value)
     popular_display_state.value, popular_container.value, popular_load_index.value = initial_load(popular_books_state.value)
+    
+
+
 
     # ---------- Popup Modal ----------
     gr.HTML("""
