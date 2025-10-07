@@ -96,7 +96,14 @@ with gr.Blocks(css="""
 
     # ---------- Hidden bridge components (JS -> Python) ----------
     # JS will set this textbox value and dispatch 'change' to trigger the Python handler
-    favorite_book_id = gr.Textbox(visible=False, elem_id="current-book-id")
+    favorite_book_id = gr.Textbox(
+        label=None,
+        placeholder="hidden favorite id",
+        value="",
+        visible=False,
+        elem_id="current-book-id",
+    )
+
     # (No need for a separate hidden button - we use the change event on the textbox)
 
     # ---------- Favorites UI ----------
@@ -259,11 +266,16 @@ with gr.Blocks(css="""
         }
 
         function setHiddenFavoriteIdAndTrigger(bookId){
-            // wrapper created by gradio for elem_id="current-book-id"
-            const wrapper = (typeof gradioApp === 'function') ? gradioApp().getElementById('current-book-id') : document.getElementById('current-book-id');
-            if(!wrapper){ console.warn('fav wrapper not found'); return false; }
-            const input = findInputInWrapper(wrapper);
-            if(!input){ console.warn('fav input not found'); return false; }
+            // try to grab direct DOM input, bypass shadow roots
+            let input = document.querySelector('#current-book-id input, #current-book-id textarea');
+            if (!input) {
+                // fallback: maybe it's directly rendered
+                input = document.getElementById('current-book-id');
+            }
+            if (!input) {
+                console.warn('Hidden favorite input not found in DOM!');
+                return false;
+            }
             input.value = bookId;
             input.dispatchEvent(new Event('input', { bubbles: true }));
             input.dispatchEvent(new Event('change', { bubbles: true }));
