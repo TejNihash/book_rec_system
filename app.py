@@ -49,8 +49,38 @@ def create_book_card_html(book):
     """
 
 def build_books_grid_html(books_df):
+    if books_df.empty:
+        return "<div style='text-align: center; padding: 40px; color: #666;'>No books found</div>"
     cards_html = [create_book_card_html(book) for _, book in books_df.iterrows()]
     return f"<div class='books-grid'>{''.join(cards_html)}</div>"
+
+def search_books(search_query, current_random_books, current_display_books):
+    """Search books by title, author, or genre"""
+    if not search_query.strip():
+        # If empty search, return to random books
+        return current_random_books.iloc[:BOOKS_PER_LOAD], gr.update(value=build_books_grid_html(current_random_books.iloc[:BOOKS_PER_LOAD]), visible=True), gr.update(visible=True), gr.update(visible=False)
+    
+    search_lower = search_query.lower()
+    
+    # Search in title, authors, and genres
+    mask = (
+        df['title'].str.lower().str.contains(search_lower, na=False) |
+        df['authors'].apply(lambda authors: any(search_lower in author.lower() for author in authors)) |
+        df['genres'].apply(lambda genres: any(search_lower in genre.lower() for genre in genres))
+    )
+    
+    search_results = df[mask].reset_index(drop=True)
+    
+    if search_results.empty:
+        return pd.DataFrame(), gr.update(value="<div style='text-align: center; padding: 40px; color: #666;'>No books found matching your search</div>", visible=True), gr.update(visible=False), gr.update(visible=True)
+    
+    # Return search results
+    return search_results, gr.update(value=build_books_grid_html(search_results), visible=True), gr.update(visible=False), gr.update(visible=True)
+
+def clear_search(current_random_books):
+    """Clear search and show random books"""
+    initial_books = current_random_books.iloc[:BOOKS_PER_LOAD]
+    return gr.update(value=""), initial_books, gr.update(value=build_books_grid_html(initial_books)), gr.update(visible=True), gr.update(visible=False)
 
 # ---------- Gradio UI ----------
 with gr.Blocks(css="""
@@ -177,6 +207,61 @@ with gr.Blocks(css="""
     transform: translateY(-2px);
     box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4);
 }
+.search-btn {
+    background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 20px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 12px rgba(72, 187, 120, 0.3);
+}
+.search-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(72, 187, 120, 0.4);
+}
+.clear-btn {
+    background: linear-gradient(135deg, #f56565 0%, #e53e3e 100%);
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 20px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 12px rgba(245, 101, 101, 0.3);
+}
+.clear-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(245, 101, 101, 0.4);
+}
+.search-section {
+    background: linear-gradient(135deg, #edf2f7 0%, #f7fafc 100%);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+    border: 1px solid #e2e8f0;
+}
+.search-header {
+    font-size: 18px;
+    font-weight: bold;
+    color: #2d3748;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.search-results-indicator {
+    background: #667eea;
+    color: white;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    margin-left: auto;
+}
 .section-title {
     font-size: 20px;
     font-weight: bold;
@@ -290,16 +375,31 @@ with gr.Blocks(css="""
     gr.Markdown("# 📚 Book Discovery Hub")
     gr.Markdown("### Explore our curated collection of amazing books")
 
-    # === RANDOM BOOKS SECTION (TOP) ===  
-    gr.Markdown("## 🎲 Random Books")
+    # === SEARCH SECTION ===
+    with gr.Column(elem_classes="search-section"):
+        gr.Markdown("### 🔍 Search Books")
+        with gr.Row():
+            search_input = gr.Textbox(
+                placeholder="Search by title, author, or genre...",
+                show_label=False,
+                container=False,
+                scale=4
+            )
+            search_btn = gr.Button("🔍 Search", elem_classes="search-btn")
+            clear_btn = gr.Button("🗑️ Clear", elem_classes="clear-btn", visible=False)
+        
+        search_indicator = gr.HTML(visible=False)
+
+    # === RANDOM BOOKS SECTION ===  
+    gr.Markdown("## 🎲 Books")
     with gr.Column():
         random_books_container = gr.HTML(elem_classes="books-section")
         
         with gr.Row():
-            random_load_more_btn = gr.Button("📚 Load More Random Books", elem_classes="load-more-btn")
+            load_more_btn = gr.Button("📚 Load More Books", elem_classes="load-more-btn")
             shuffle_btn = gr.Button("🔀 Shuffle Books", elem_classes="load-more-btn")
 
-    # === POPULAR BOOKS SECTION (BOTTOM) ===
+    # === POPULAR BOOKS SECTION ===
     gr.Markdown("## 📈 Popular Books")
     with gr.Column():
         popular_books_container = gr.HTML(elem_classes="books-section")
@@ -316,16 +416,32 @@ with gr.Blocks(css="""
     popular_display_state = gr.State(pd.DataFrame())
     popular_index_state = gr.State(0)
 
+    # Search state
+    is_searching_state = gr.State(False)
+    search_results_state = gr.State(pd.DataFrame())
+
     # ---------- Functions ----------
-    def load_more_random(loaded_books, display_books, page_idx):
-        start = page_idx * BOOKS_PER_LOAD
-        end = start + BOOKS_PER_LOAD
-        new_books = loaded_books.iloc[start:end]
-        if new_books.empty:
-            return display_books, gr.update(value=build_books_grid_html(display_books)), gr.update(visible=False), page_idx
-        combined = pd.concat([display_books, new_books], ignore_index=True)
-        html = build_books_grid_html(combined)
-        return combined, gr.update(value=html), gr.update(visible=True), page_idx + 1
+    def load_more_random(loaded_books, display_books, page_idx, is_searching, search_results):
+        if is_searching:
+            # If searching, load more search results
+            start = page_idx * BOOKS_PER_LOAD
+            end = start + BOOKS_PER_LOAD
+            new_books = search_results.iloc[start:end]
+            if new_books.empty:
+                return display_books, gr.update(value=build_books_grid_html(display_books)), gr.update(visible=False), page_idx, is_searching, search_results
+            combined = pd.concat([display_books, new_books], ignore_index=True)
+            html = build_books_grid_html(combined)
+            return combined, gr.update(value=html), gr.update(visible=True), page_idx + 1, is_searching, search_results
+        else:
+            # Normal random books load
+            start = page_idx * BOOKS_PER_LOAD
+            end = start + BOOKS_PER_LOAD
+            new_books = loaded_books.iloc[start:end]
+            if new_books.empty:
+                return display_books, gr.update(value=build_books_grid_html(display_books)), gr.update(visible=False), page_idx, is_searching, search_results
+            combined = pd.concat([display_books, new_books], ignore_index=True)
+            html = build_books_grid_html(combined)
+            return combined, gr.update(value=html), gr.update(visible=True), page_idx + 1, is_searching, search_results
 
     def load_more_popular(loaded_books, display_books, page_idx):
         start = page_idx * BOOKS_PER_LOAD
@@ -337,23 +453,79 @@ with gr.Blocks(css="""
         html = build_books_grid_html(combined)
         return combined, gr.update(value=html), gr.update(visible=True), page_idx + 1
 
-    def shuffle_random_books(loaded_books, display_books):
+    def shuffle_random_books(loaded_books, display_books, is_searching, search_results):
+        if is_searching:
+            # Can't shuffle while searching
+            return loaded_books, display_books, gr.update(value=build_books_grid_html(display_books)), is_searching, search_results
         shuffled = loaded_books.sample(frac=1).reset_index(drop=True)
         initial_books = shuffled.iloc[:BOOKS_PER_LOAD]
         html = build_books_grid_html(initial_books)
-        return shuffled, initial_books, html, 1
+        return shuffled, initial_books, html, is_searching, search_results
+
+    # Search functions
+    def perform_search(search_query, current_random_books, current_display_books, is_searching, search_results):
+        if not search_query.strip():
+            return clear_search(current_random_books, is_searching, search_results)
+        
+        search_results_df, books_html, load_more_visible, clear_visible = search_books(search_query, current_random_books, current_display_books)
+        
+        if search_results_df.empty:
+            indicator_html = "<div class='search-results-indicator'>No results</div>"
+        else:
+            indicator_html = f"<div class='search-results-indicator'>{len(search_results_df)} results</div>"
+        
+        return (
+            search_results_df, 
+            books_html, 
+            load_more_visible, 
+            gr.update(visible=clear_visible), 
+            gr.update(value=indicator_html, visible=True), 
+            True, 
+            search_results_df
+        )
+
+    def clear_search_handler(current_random_books, is_searching, search_results):
+        search_input_clear = gr.update(value="")
+        initial_books = current_random_books.iloc[:BOOKS_PER_LOAD]
+        books_html = gr.update(value=build_books_grid_html(initial_books))
+        load_more_visible = gr.update(visible=True)
+        clear_visible = gr.update(visible=False)
+        indicator_visible = gr.update(visible=False)
+        
+        return (
+            search_input_clear, 
+            initial_books, 
+            books_html, 
+            load_more_visible, 
+            clear_visible, 
+            indicator_visible, 
+            False, 
+            pd.DataFrame()
+        )
 
     # Event handlers
-    random_load_more_btn.click(
+    search_btn.click(
+        perform_search,
+        [search_input, random_books_state, random_display_state, is_searching_state, search_results_state],
+        [random_display_state, random_books_container, load_more_btn, clear_btn, search_indicator, is_searching_state, search_results_state]
+    )
+
+    clear_btn.click(
+        clear_search_handler,
+        [random_books_state, is_searching_state, search_results_state],
+        [search_input, random_display_state, random_books_container, load_more_btn, clear_btn, search_indicator, is_searching_state, search_results_state]
+    )
+
+    load_more_btn.click(
         load_more_random,
-        [random_books_state, random_display_state, random_index_state],
-        [random_display_state, random_books_container, random_load_more_btn, random_index_state]
+        [random_books_state, random_display_state, random_index_state, is_searching_state, search_results_state],
+        [random_display_state, random_books_container, load_more_btn, random_index_state, is_searching_state, search_results_state]
     )
 
     shuffle_btn.click(
         shuffle_random_books,
-        [random_books_state, random_display_state],
-        [random_books_state, random_display_state, random_books_container, random_index_state]
+        [random_books_state, random_display_state, is_searching_state, search_results_state],
+        [random_books_state, random_display_state, random_books_container, is_searching_state, search_results_state]
     )
 
     popular_load_more_btn.click(
@@ -366,7 +538,7 @@ with gr.Blocks(css="""
     def initial_load_random(loaded_books):
         initial_books = loaded_books.iloc[:BOOKS_PER_LOAD]
         html = build_books_grid_html(initial_books)
-        return initial_books, html, 1
+        return initial_books, html, 1, False, pd.DataFrame()
 
     def initial_load_popular(loaded_books):
         initial_books = loaded_books.iloc[:BOOKS_PER_LOAD]
@@ -374,10 +546,13 @@ with gr.Blocks(css="""
         return initial_books, html, 1
 
     # Set initial values
-    random_display_state.value, random_books_container.value, random_index_state.value = initial_load_random(random_books_state.value)
+    (random_display_state.value, random_books_container.value, 
+     random_index_state.value, is_searching_state.value, 
+     search_results_state.value) = initial_load_random(random_books_state.value)
+    
     popular_display_state.value, popular_books_container.value, popular_index_state.value = initial_load_popular(popular_books_state.value)
 
-    # ---------- SIMPLE SCROLL & REMEMBER POPUP ----------
+    # ---------- POPUP SCRIPT ----------
     gr.HTML("""
     <div class="popup-overlay" id="popup-overlay"></div>
     <div class="popup-container" id="popup-container">
@@ -406,7 +581,6 @@ with gr.Blocks(css="""
         const card = e.target.closest('.book-card');
         if (!card) return;
         
-        // 1. STORE current scroll position
         originalScrollPosition = window.scrollY || document.documentElement.scrollTop;
         
         const title = card.dataset.title;
@@ -418,7 +592,6 @@ with gr.Blocks(css="""
         const year = card.dataset.year || 'N/A';
         const pages = card.dataset.pages || 'N/A';
         
-        // Generate star rating
         const numRating = parseFloat(rating);
         const fullStars = Math.floor(numRating);
         const hasHalfStar = numRating % 1 >= 0.5;
@@ -458,19 +631,15 @@ with gr.Blocks(css="""
             </div>
         `;
         
-        // 2. SHOW POPUP (auto-centered by CSS)
         overlay.style.display = 'block';
         container.style.display = 'block';
         document.body.style.overflow = 'hidden';
     });
 
     function closePopup() {
-        // 3. HIDE POPUP
         overlay.style.display = 'none';
         container.style.display = 'none';
         document.body.style.overflow = 'auto';
-        
-        // 4. RESTORE SCROLL POSITION
         window.scrollTo(0, originalScrollPosition);
     }
 
