@@ -48,6 +48,30 @@ def create_book_card_html(book, favorites):
     </div>
     """
 
+# ---------- Search Function ----------
+def search_books(query, favorites):
+    if not query.strip():
+        # Return initial 12 random books
+        subset = df.sample(frac=1).reset_index(drop=True).iloc[:BOOKS_PER_LOAD]
+    else:
+        q = query.lower()
+        filtered = df[df.apply(
+            lambda row: q in row['title'].lower() or
+                        any(q in a.lower() for a in row['authors']) or
+                        any(q in g.lower() for g in row['genres']),
+            axis=1
+        )]
+        subset = filtered.iloc[:BOOKS_PER_LOAD]
+    html = build_books_grid_html(subset, favorites)
+    return subset, html
+
+# ---------- Clear Function ----------
+def clear_search(favorites):
+    subset = df.sample(frac=1).reset_index(drop=True).iloc[:BOOKS_PER_LOAD]
+    html = build_books_grid_html(subset, favorites)
+    return "", subset, html
+
+    
 def build_books_grid_html(books_df, favorites):
     cards_html = [create_book_card_html(book, favorites) for _, book in books_df.iterrows()]
     return f"<div class='books-grid'>{''.join(cards_html)}</div>"
@@ -164,6 +188,12 @@ with gr.Blocks(css="""
         return fav_list, gr.update(value=html)
     hidden_btn.click(toggle_fav, [gr.State(""), favorites_state], [favorites_state, hidden_btn])
 
+    # ---------- Search Box ----------
+    with gr.Row():
+        search_input = gr.Textbox(label="🔍 Search Books", placeholder="Type title, author, or genre...", elem_classes="search-box")
+        search_clear = gr.Button("❌ Clear", elem_classes="load-more-btn")
+
+
     # ---------- Random Books ----------
     gr.Markdown("## 🎲 Random Books")
     random_books_container = gr.HTML(elem_classes="books-section")
@@ -190,5 +220,11 @@ with gr.Blocks(css="""
 
     random_books_container.value = build_books_grid_html(random_display_state.value.iloc[:BOOKS_PER_LOAD], favorites_state.value)
     popular_books_container.value = build_books_grid_html(popular_display_state.value.iloc[:BOOKS_PER_LOAD], favorites_state.value)
+
+
+    # ---------- Events ----------
+    search_input.change(search_books, [search_input, favorites_state], [random_display_state, random_books_container])
+    search_clear.click(clear_search, [favorites_state], [search_input, random_display_state, random_books_container])
+
 
 demo.launch()
