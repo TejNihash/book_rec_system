@@ -22,9 +22,7 @@ def create_book_card_html(book):
     stars = "⭐" * int(rating) + "☆" * (5 - int(rating))
     if rating % 1 >= 0.5:
         stars = "⭐" * (int(rating) + 1) + "☆" * (4 - int(rating))
-    
     description = book.get('description', 'No description available.')
-    
     return f"""
     <div class='book-card' data-id='{book["id"]}' data-title="{book['title']}" 
          data-authors="{', '.join(book['authors'])}" data-genres="{', '.join(book['genres'])}" 
@@ -56,9 +54,9 @@ with gr.Blocks(css="""
     border: 1px solid #e0e0e0;
     border-radius: 12px;
     padding: 16px;
-    height: 500px; 
-    overflow-y: auto; 
-    margin-bottom: 15px;
+    height: 500px; /* Fixed height */
+    overflow-y: auto; /* Internal scroll */
+    margin-bottom: 20px;
     background: linear-gradient(135deg, #f7f7f7 0%, #ffffff 100%);
     box-shadow: 0 4px 12px rgba(0,0,0,0.1);
 }
@@ -67,31 +65,139 @@ with gr.Blocks(css="""
     grid-template-columns: repeat(6, 1fr);
     gap: 16px;
 }
-.load-more-btn, .shuffle-btn {
-    margin-right: 10px;
-    padding: 8px 12px;
-    border-radius: 8px;
-    border: none;
-    background:#667eea;
-    color:white;
-    cursor:pointer;
+.book-card {
+    background: #ffffff;
+    border-radius: 12px;
+    padding: 10px;
+    box-shadow: 0 3px 10px rgba(0,0,0,0.15);
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.3s ease;
+    border: 1px solid #eaeaea;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
 }
+.book-card:hover {
+    transform: translateY(-4px) scale(1.02);
+    box-shadow: 0 8px 20px rgba(0,0,0,0.25);
+    border-color: #667eea;
+}
+.book-image-container {
+    position: relative;
+    margin-bottom: 10px;
+}
+.book-card img {
+    width: 100%;
+    height: 180px;
+    object-fit: cover;
+    border-radius: 8px;
+    border: 1px solid #eee;
+}
+.book-badge {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: rgba(102, 126, 234, 0.9);
+    color: white;
+    padding: 2px 6px;
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: bold;
+}
+.book-info {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.book-title { 
+    font-size: 13px; 
+    font-weight: 700; 
+    color: #222; 
+    line-height: 1.3;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    margin-bottom: 2px;
+}
+.book-authors { 
+    font-size: 11px; 
+    color: #667eea; 
+    font-weight: 600;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    margin-bottom: 3px;
+}
+.book-rating {
+    font-size: 10px;
+    color: #ffa500;
+    margin-bottom: 4px;
+}
+.book-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-top: auto;
+}
+.book-pages {
+    font-size: 10px;
+    color: #666;
+    font-weight: 500;
+}
+.book-genres {
+    font-size: 9px;
+    color: #888;
+    font-style: italic;
+}
+.load-more-section {
+    text-align: center;
+    margin: 10px 0;
+}
+.load-more-btn {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    padding: 10px 25px;
+    border-radius: 20px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+    font-size: 12px;
+}
+.load-more-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4);
+}
+.section-title {
+    font-size: 20px;
+    font-weight: bold;
+    color: #2d3748;
+    margin-bottom: 15px;
+    border-left: 4px solid #667eea;
+    padding-left: 12px;
+}
+
 #detail-overlay { 
     display:none; 
-    position:fixed;  
+    position:fixed; 
     top:0; 
     left:0; 
     width:100%; 
     height:100%; 
-    background:rgba(0,0,0,0.75);
+    background:rgba(255,255,255,0.95);
     z-index:1000; 
-    backdrop-filter: blur(4px);
+    backdrop-filter: blur(5px);
 }
 #detail-box { 
-    position:fixed;  
-    top:50%;         
-    left:50%;        
-    transform: translate(-50%, -50%); 
+    position:fixed; 
+    top:50%; 
+    left:50%; 
+    transform: translate(-50%, -50%);
     background:#ffffff;
     border-radius:16px; 
     padding:24px; 
@@ -117,6 +223,35 @@ with gr.Blocks(css="""
     display: flex;
     align-items: center;
     justify-content: center;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+}
+#detail-content { 
+    line-height:1.6; 
+    font-size:15px; 
+    color:#222; 
+}
+.detail-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin: 15px 0;
+    padding: 12px;
+    background: #f0f4ff;
+    border-radius: 8px;
+    border: 1px solid #d0d6ff;
+}
+.detail-stat {
+    text-align: center;
+}
+.detail-stat-value {
+    font-size: 16px;
+    font-weight: bold;
+    color: #667eea;
+}
+.detail-stat-label {
+    font-size: 11px;
+    color: #444;
+    margin-top: 2px;
 }
 .description-scroll {
     max-height: 200px;
@@ -125,6 +260,10 @@ with gr.Blocks(css="""
 }
 .description-scroll::-webkit-scrollbar {
     width: 6px;
+}
+.description-scroll::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 3px;
 }
 .description-scroll::-webkit-scrollbar-thumb {
     background: #667eea;
@@ -138,29 +277,34 @@ with gr.Blocks(css="""
     gr.Markdown("# 📚 Book Discovery Hub")
     gr.Markdown("### Explore our curated collection of amazing books")
 
-    # ---------- Random Books ----------
-    gr.Markdown("## 🔀 Random Books")
-    random_books_state = gr.State(df.sample(frac=1).reset_index(drop=True))
+    # === RANDOM BOOKS SECTION (TOP) ===  
+    gr.Markdown("## 🎲 Random Books")
+    with gr.Column():
+        random_books_container = gr.HTML(elem_classes="books-section")
+        
+        with gr.Row():
+            random_load_more_btn = gr.Button("📚 Load More Random Books", elem_classes="load-more-btn")
+            shuffle_btn = gr.Button("🔀 Shuffle Books", elem_classes="load-more-btn")
+
+    # === POPULAR BOOKS SECTION (BOTTOM) ===
+    gr.Markdown("## 📈 Popular Books")
+    with gr.Column():
+        popular_books_container = gr.HTML(elem_classes="books-section")
+        
+        with gr.Row():
+            popular_load_more_btn = gr.Button("📚 Load More Popular Books", elem_classes="load-more-btn")
+
+    # State for both sections
+    random_books_state = gr.State(df.sample(frac=1).reset_index(drop=True))  # Shuffled
     random_display_state = gr.State(pd.DataFrame())
-    random_load_index = gr.State(0)
-    random_container = gr.HTML()
-
-    with gr.Row():
-        random_load_btn = gr.Button("📚 Load More", elem_classes="load-more-btn")
-        random_shuffle_btn = gr.Button("🔀 Shuffle", elem_classes="shuffle-btn")
-
-    # ---------- Popular Books ----------
-    gr.Markdown("## ⭐ Popular Books")
-    popular_books_state = gr.State(df.sort_values("rating", ascending=False).reset_index(drop=True))
+    random_index_state = gr.State(0)
+    
+    popular_books_state = gr.State(df.copy())  # Original order
     popular_display_state = gr.State(pd.DataFrame())
-    popular_load_index = gr.State(0)
-    popular_container = gr.HTML()
-
-    with gr.Row():
-        popular_load_btn = gr.Button("📚 Load More", elem_classes="load-more-btn")
+    popular_index_state = gr.State(0)
 
     # ---------- Functions ----------
-    def load_more(loaded_books, display_books, page_idx):
+    def load_more_random(loaded_books, display_books, page_idx):
         start = page_idx * BOOKS_PER_LOAD
         end = start + BOOKS_PER_LOAD
         new_books = loaded_books.iloc[start:end]
@@ -170,39 +314,58 @@ with gr.Blocks(css="""
         html = build_books_grid_html(combined)
         return combined, gr.update(value=html), gr.update(visible=True), page_idx + 1
 
-    def shuffle_books(loaded_books, display_books):
+    def load_more_popular(loaded_books, display_books, page_idx):
+        start = page_idx * BOOKS_PER_LOAD
+        end = start + BOOKS_PER_LOAD
+        new_books = loaded_books.iloc[start:end]
+        if new_books.empty:
+            return display_books, gr.update(value=build_books_grid_html(display_books)), gr.update(visible=False), page_idx
+        combined = pd.concat([display_books, new_books], ignore_index=True)
+        html = build_books_grid_html(combined)
+        return combined, gr.update(value=html), gr.update(visible=True), page_idx + 1
+
+    def shuffle_random_books(loaded_books, display_books):
         shuffled = loaded_books.sample(frac=1).reset_index(drop=True)
         initial_books = shuffled.iloc[:BOOKS_PER_LOAD]
         html = build_books_grid_html(initial_books)
         return shuffled, initial_books, html, 1
 
-    # Event handlers
-    random_load_btn.click(
-        load_more, 
-        [random_books_state, random_display_state, random_load_index],
-        [random_display_state, random_container, random_load_btn, random_load_index]
-    )
-    random_shuffle_btn.click(
-        shuffle_books,
-        [random_books_state, random_display_state],
-        [random_books_state, random_display_state, random_container, random_load_index]
-    )
-    popular_load_btn.click(
-        load_more,
-        [popular_books_state, popular_display_state, popular_load_index],
-        [popular_display_state, popular_container, popular_load_btn, popular_load_index]
+    # Event handlers for Random Books (top section)
+    random_load_more_btn.click(
+        load_more_random,
+        [random_books_state, random_display_state, random_index_state],
+        [random_display_state, random_books_container, random_load_more_btn, random_index_state]
     )
 
-    # Initialize first load
-    def initial_load(loaded_books):
+    shuffle_btn.click(
+        shuffle_random_books,
+        [random_books_state, random_display_state],
+        [random_books_state, random_display_state, random_books_container, random_index_state]
+    )
+
+    # Event handlers for Popular Books (bottom section)
+    popular_load_more_btn.click(
+        load_more_popular,
+        [popular_books_state, popular_display_state, popular_index_state],
+        [popular_display_state, popular_books_container, popular_load_more_btn, popular_index_state]
+    )
+
+    # Initialize both sections
+    def initial_load_random(loaded_books):
         initial_books = loaded_books.iloc[:BOOKS_PER_LOAD]
         html = build_books_grid_html(initial_books)
         return initial_books, html, 1
 
-    random_display_state.value, random_container.value, random_load_index.value = initial_load(random_books_state.value)
-    popular_display_state.value, popular_container.value, popular_load_index.value = initial_load(popular_books_state.value)
+    def initial_load_popular(loaded_books):
+        initial_books = loaded_books.iloc[:BOOKS_PER_LOAD]
+        html = build_books_grid_html(initial_books)
+        return initial_books, html, 1
 
-    # ---------- Popup Modal ----------
+    # Set initial values
+    random_display_state.value, random_books_container.value, random_index_state.value = initial_load_random(random_books_state.value)
+    popular_display_state.value, popular_books_container.value, popular_index_state.value = initial_load_popular(popular_books_state.value)
+
+    # ---------- COMPLETELY HIJACKED Detail Popup - fixed, but preserves container scroll ----------
     gr.HTML("""
     <div id="detail-overlay">
         <div id="detail-box" role="dialog" aria-modal="true" tabindex="-1">
@@ -211,41 +374,89 @@ with gr.Blocks(css="""
         </div>
     </div>
 
-
     <script>
     const overlay = document.getElementById('detail-overlay');
     const box = document.getElementById('detail-box');
     const closeBtn = document.getElementById('detail-close');
-    let scrollPos = 0;
 
-    function escapeHtml(str){
-        return str
-            ? String(str)
-                .replace(/&/g,'&amp;')
-                .replace(/</g,'&lt;')
-                .replace(/>/g,'&gt;')
-                .replace(/"/g,'&quot;')
-                .replace(/'/g,'&#039;')
-            : "";
+    // saved state
+    let saved = {
+        scrollableContainer: null,
+        containerScrollTop: 0,
+        windowScrollTop: 0,
+        prevOverflow: ''
+    };
+    // wheel/touch prevent handlers
+    const wheelHandler = (e) => { e.preventDefault(); };
+    const touchHandler = (e) => { e.preventDefault(); };
+
+    function escapeHtml(str){return str?String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;'):"";}
+
+    function formatText(text) { return text ? text.replace(/\\n/g,'<br>') : 'No description available.'; }
+
+    // detect scrollable ancestor inside which card sits (prefer .books-section)
+    function isScrollable(el) {
+        if (!el || el === document.body) return false;
+        const style = window.getComputedStyle(el);
+        const overflowY = style.overflowY;
+        return (overflowY === 'auto' || overflowY === 'scroll') && el.scrollHeight > el.clientHeight;
     }
-    function formatText(text) { 
-        return text ? text.replace(/\\n/g,'<br>') : 'No description available.'; 
+    function findScrollableParent(el) {
+        let node = el.parentElement;
+        while (node) {
+            if (isScrollable(node)) return node;
+            node = node.parentElement;
+        }
+        // fallback to document scrolling element
+        return document.scrollingElement || document.documentElement;
     }
-    
-    // ✅ Updated scroll logic — no layout shift
-    function disableScroll() {
-        scrollPos = window.scrollY;
-        document.body.style.overflow = 'hidden';
+
+    function lockScrolling(container) {
+        // store previous overflow for restoration
+        if (container === document.scrollingElement || container === document.documentElement) {
+            // page-level
+            saved.windowScrollTop = window.pageYOffset || document.documentElement.scrollTop || 0;
+            document.body.style.overflow = 'hidden';
+            // also prevent wheel/touch globally
+            window.addEventListener('wheel', wheelHandler, { passive: false });
+            window.addEventListener('touchmove', touchHandler, { passive: false });
+        } else {
+            saved.containerScrollTop = container.scrollTop;
+            saved.prevOverflow = container.style.overflow || '';
+            container.style.overflow = 'hidden';
+            // prevent wheel/touch so user can't accidentally scroll other things
+            window.addEventListener('wheel', wheelHandler, { passive: false });
+            window.addEventListener('touchmove', touchHandler, { passive: false });
+        }
     }
-    function enableScroll() {
-        document.body.style.overflow = '';
-        window.scrollTo(0, scrollPos);
+
+    function unlockScrolling(container) {
+        if (container === document.scrollingElement || container === document.documentElement) {
+            document.body.style.overflow = '';
+            window.scrollTo(0, saved.windowScrollTop || 0);
+            window.removeEventListener('wheel', wheelHandler);
+            window.removeEventListener('touchmove', touchHandler);
+        } else {
+            container.style.overflow = saved.prevOverflow || '';
+            container.scrollTop = saved.containerScrollTop || 0;
+            // also restore window scroll just in case
+            window.scrollTo(0, saved.windowScrollTop || 0);
+            window.removeEventListener('wheel', wheelHandler);
+            window.removeEventListener('touchmove', touchHandler);
+        }
+        // clear saved
+        saved = { scrollableContainer: null, containerScrollTop: 0, windowScrollTop: 0, prevOverflow: '' };
     }
-    
+
     document.addEventListener('click', e => {
         const card = e.target.closest('.book-card');
         if(!card) return;
-    
+
+        // Find the scrollable parent container (if any)
+        const container = findScrollableParent(card) || (document.scrollingElement || document.documentElement);
+        saved.scrollableContainer = container;
+        saved.windowScrollTop = window.pageYOffset || document.documentElement.scrollTop || 0;
+
         const title = card.dataset.title;
         const authors = card.dataset.authors;
         const genres = card.dataset.genres;
@@ -254,14 +465,14 @@ with gr.Blocks(css="""
         const rating = card.dataset.rating || '0';
         const year = card.dataset.year || 'N/A';
         const pages = card.dataset.pages || 'N/A';
-    
+
         const numRating = parseFloat(rating);
         const fullStars = Math.floor(numRating);
         const hasHalfStar = numRating % 1 >= 0.5;
         let stars = '⭐'.repeat(fullStars);
         if(hasHalfStar) stars += '½';
         stars += '☆'.repeat(5 - fullStars - (hasHalfStar ? 1 : 0));
-    
+
         document.getElementById('detail-content').innerHTML = `
             <div style="display:flex;gap:20px;align-items:flex-start;margin-bottom:20px;">
                 <img src="${img}" style="width:200px;height:auto;border-radius:8px;object-fit:cover;box-shadow:0 4px 12px rgba(0,0,0,0.2);">
@@ -282,7 +493,7 @@ with gr.Blocks(css="""
                     <div class="detail-stat-label">PAGES</div>
                 </div>
                 <div class="detail-stat">
-                    <div class="detail-stat-value">${Math.ceil(parseInt(pages)/250)||'N/A'}</div>
+                    <div class="detail-stat-value">${Math.ceil(parseInt(pages) / 250) || 'N/A'}</div>
                     <div class="detail-stat-label">READING TIME (HOURS)</div>
                 </div>
             </div>
@@ -293,26 +504,26 @@ with gr.Blocks(css="""
                 </div>
             </div>
         `;
-    
+
+        // show overlay and lock scroll only on the relevant container
         overlay.style.display = 'block';
-        disableScroll();
-        box.focus();
+        lockScrolling(container);
+
+        // focus modal without causing scroll (if supported)
+        try { box.focus({preventScroll: true}); } catch (err) { box.focus(); }
     });
-    
+
     function closePopup() {
         overlay.style.display = 'none';
-        enableScroll();
+        // unlock using saved container
+        const container = saved.scrollableContainer || (document.scrollingElement || document.documentElement);
+        unlockScrolling(container);
     }
-    
+
     closeBtn.addEventListener('click', closePopup);
-    overlay.addEventListener('click', e => { if(e.target===overlay) closePopup(); });
-    document.addEventListener('keydown', e => { if(e.key==='Escape') closePopup(); });
+    overlay.addEventListener('click', e => { if(e.target === overlay) closePopup(); });
+    document.addEventListener('keydown', e => { if(e.key === 'Escape') closePopup(); });
     </script>
-
-
-
-
-
     """)
 
 demo.launch()
