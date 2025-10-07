@@ -369,7 +369,7 @@ with gr.Blocks(css="""
     popular_display_state.value, popular_books_container.value, popular_index_state.value = initial_load_popular(popular_books_state.value)
     random_display_state.value, random_books_container.value, random_index_state.value = initial_load_random(random_books_state.value)
 
-    # ---------- Enhanced Detail Popup with Smart Scroll Behavior ----------
+    # ---------- Modal Popup with Full-Screen Takeover & Scroll Preservation ----------
     gr.HTML("""
     <div id="detail-overlay">
         <div id="detail-box">
@@ -377,26 +377,37 @@ with gr.Blocks(css="""
             <div id="detail-content"></div>
         </div>
     </div>
+    
     <script>
     const overlay = document.getElementById('detail-overlay');
     const box = document.getElementById('detail-box');
     const closeBtn = document.getElementById('detail-close');
-    let scrollPosition = 0;
-
-    function escapeHtml(str){return str?String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;'):"";}
-
-    function formatText(text) {
-        if (!text) return 'No description available.';
-        return text.replace(/\\n/g, '<br>');
+    let scrollPosition = 0; // Store scroll position before modal
+    
+    function escapeHtml(str){
+        return str?String(str).replace(/&/g,'&amp;')
+                             .replace(/</g,'&lt;')
+                             .replace(/>/g,'&gt;')
+                             .replace(/"/g,'&quot;')
+                             .replace(/'/g,'&#039;'):"";
     }
-
-    document.addEventListener('click', e=>{
+    
+    function formatText(text){
+        return text ? text.replace(/\\n/g,'<br>') : 'No description available.';
+    }
+    
+    // Open modal
+    document.addEventListener('click', e => {
         const card = e.target.closest('.book-card');
         if(!card) return;
-        
-        // Store current scroll position
+    
+        // Store scroll position before opening modal
         scrollPosition = window.scrollY || document.documentElement.scrollTop;
-        
+    
+        // Optional: scroll halfway up so modal shows nicely
+        const modalTopOffset = window.innerHeight/4;
+        window.scrollTo({top: scrollPosition - modalTopOffset, behavior: 'auto'});
+    
         const title = card.dataset.title;
         const authors = card.dataset.authors;
         const genres = card.dataset.genres;
@@ -405,15 +416,16 @@ with gr.Blocks(css="""
         const rating = card.dataset.rating || '0';
         const year = card.dataset.year || 'N/A';
         const pages = card.dataset.pages || 'N/A';
-        
+    
         // Generate star rating
         const numRating = parseFloat(rating);
         const fullStars = Math.floor(numRating);
         const hasHalfStar = numRating % 1 >= 0.5;
         let stars = '⭐'.repeat(fullStars);
-        if (hasHalfStar) stars += '½';
+        if(hasHalfStar) stars += '½';
         stars += '☆'.repeat(5 - fullStars - (hasHalfStar ? 1 : 0));
-        
+    
+        // Fill modal content
         document.getElementById('detail-content').innerHTML = `
             <div style="display:flex;gap:20px;align-items:flex-start;margin-bottom:20px;">
                 <img src="${img}" style="width:200px;height:auto;border-radius:8px;object-fit:cover;box-shadow:0 4px 12px rgba(0,0,0,0.2);">
@@ -434,7 +446,7 @@ with gr.Blocks(css="""
                     <div class="detail-stat-label">PAGES</div>
                 </div>
                 <div class="detail-stat">
-                    <div class="detail-stat-value">${Math.ceil(parseInt(pages) / 250) || 'N/A'}</div>
+                    <div class="detail-stat-value">${Math.ceil(parseInt(pages)/250) || 'N/A'}</div>
                     <div class="detail-stat-label">READING TIME (HOURS)</div>
                 </div>
             </div>
@@ -445,31 +457,24 @@ with gr.Blocks(css="""
                 </div>
             </div>
         `;
-        
-        // Show overlay and auto-scroll to a good viewing position
+    
+        // Show modal and block background scroll
         overlay.style.display = 'block';
         document.body.style.overflow = 'hidden';
-        
-        // Auto-scroll to a comfortable viewing position (1/4 from top)
-        window.scrollTo(0, Math.max(0, scrollPosition - 200));
     });
 
-    function closePopup() {
+    // Close modal and restore scroll
+    function closePopup(){
         overlay.style.display = 'none';
         document.body.style.overflow = 'auto';
-        
-        // Return to original scroll position
-        window.scrollTo(0, scrollPosition);
+        window.scrollTo(0, scrollPosition); // Return to previous scroll position
     }
-
+    
     closeBtn.addEventListener('click', closePopup);
-    overlay.addEventListener('click', e=>{
-        if(e.target===overlay) closePopup();
-    });
-    document.addEventListener('keydown', e=>{
-        if(e.key==='Escape') closePopup();
-    });
+    overlay.addEventListener('click', e => { if(e.target === overlay) closePopup(); });
+    document.addEventListener('keydown', e => { if(e.key === 'Escape') closePopup(); });
     </script>
     """)
+
 
 demo.launch()
