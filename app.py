@@ -258,9 +258,8 @@ with gr.Blocks(css="""
 
         favBtn.addEventListener('click', function(){
             if(!lastBookId) return;
-            // Trigger Gradio event
-            const favEvent = new CustomEvent("add-to-favorites", { detail: { book_id: lastBookId } });
-            document.dispatchEvent(favEvent);
+            document.querySelector('input[id^="component"]').value = lastBookId; // set hidden textbox
+            document.querySelector('input[id^="component"]').dispatchEvent(new Event('change'));
             alert("Added to Favorites!");
         });
 
@@ -268,16 +267,22 @@ with gr.Blocks(css="""
     </script>
     """)
 
-    # ---------- Add to Favorites Event ----------
+    # Hidden Textbox to receive book ID from JS
+    favorite_trigger = gr.Textbox(visible=False)
+    
+    # Python function to handle favorites
     def add_to_favorites(book_id, all_books, favorites):
         book_row = all_books[all_books["id"]==book_id]
-        if book_row.empty:
-            return gr.update(value=build_books_grid_html(favorites)), favorites
-        if book_id in favorites["id"].values:
+        if book_row.empty or book_id in favorites["id"].values:
             return gr.update(value=build_books_grid_html(favorites)), favorites
         new_fav = pd.concat([favorites, book_row], ignore_index=True)
         return gr.update(value=build_books_grid_html(new_fav)), new_fav
-
+    
+    favorite_trigger.change(
+        add_to_favorites,
+        [favorite_trigger, random_books_state, favorites_state],
+        [favorites_container, favorites_state]
+    )
     # Connect JS custom event to Gradio via JS listener
     demo.load(lambda: None, [], [], _js="""
         document.addEventListener('add-to-favorites', e=>{
