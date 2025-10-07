@@ -70,10 +70,9 @@ with gr.Blocks(css="""
     gap: 16px;
 }
 /* ... (all other CSS remains the same) ... */
-
 #detail-overlay { 
     display:none; 
-    position:fixed; 
+    position:fixed;  /* Changed to fixed */
     top:0; 
     left:0; 
     width:100%; 
@@ -83,7 +82,10 @@ with gr.Blocks(css="""
     backdrop-filter: blur(5px);
 }
 #detail-box { 
-    position:absolute; 
+    position:fixed;  /* CHANGED TO FIXED - This is the key! */
+    top:50%;         /* Center vertically in viewport */
+    left:50%;        /* Center horizontally in viewport */
+    transform: translate(-50%, -50%); /* Perfect centering */
     background:#ffffff;
     border-radius:16px; 
     padding:24px; 
@@ -245,7 +247,7 @@ with gr.Blocks(css="""
 
     display_books_state.value, books_container.value, stats_html.value, load_index_state.value = initial_load(loaded_books_state.value)
 
-# ---------- Fixed Detail Popup with True Screen Centering ----------
+    # ---------- Fixed Detail Popup with Viewport Positioning ----------
     gr.HTML("""
     <div id="detail-overlay">
         <div id="detail-box">
@@ -275,7 +277,7 @@ with gr.Blocks(css="""
         const desc = card.dataset.desc;
         const img = card.dataset.img;
         const rating = card.dataset.rating || '0';
-        const year = card.dataset.year || 'N/A';
+            const year = card.dataset.year || 'N/A';
         const pages = card.dataset.pages || 'N/A';
         
         // Generate star rating
@@ -308,7 +310,7 @@ with gr.Blocks(css="""
                 <div class="detail-stat">
                     <div class="detail-stat-value">${Math.ceil(parseInt(pages) / 250) || 'N/A'}</div>
                     <div class="detail-stat-label">READING TIME (HOURS)</div>
-                </div>
+                    </div>
             </div>
             <div style="margin-top:15px;">
                 <h3 style="margin:0 0 10px 0;color:#1a202c;font-size:16px;">Description</h3>
@@ -318,10 +320,7 @@ with gr.Blocks(css="""
             </div>
         `;
         
-        // SIMPLE FIX: Always center in the viewport regardless of scroll position
-        box.style.left = '50%';
-        box.style.top = '50%';
-        box.style.transform = 'translate(-50%, -50%)';
+        // Show the overlay - positioning is now handled by CSS fixed positioning
         overlay.style.display = 'block';
         
         // Prevent background scrolling when popup is open
@@ -342,4 +341,8 @@ with gr.Blocks(css="""
     });
     </script>
     """)
+
+
+
+        
 demo.launch()
