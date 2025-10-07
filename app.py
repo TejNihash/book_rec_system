@@ -170,68 +170,41 @@ with gr.Blocks(css="""
 
     # ---------- Details Popup ----------
     gr.HTML("""
-    <div id="card-details-popup">
-        <span id="card-details-popup-close">&times;</span>
-        <div id="card-details-popup-content"></div>
-        <button id="add-to-favorites" style="margin-top:10px;background:#667eea;color:white;padding:6px 12px;border:none;border-radius:6px;cursor:pointer;">Add to Favorites</button>
-    </div>
+<div id="card-details-popup">
+    <span id="card-details-popup-close">&times;</span>
+    <div id="card-details-popup-content"></div>
+</div>
 
-    <script>
-    (function(){
-        const popup = document.getElementById('card-details-popup');
-        const content = document.getElementById('card-details-popup-content');
-        const closeBtn = document.getElementById('card-details-popup-close');
-        const favBtn = document.getElementById('add-to-favorites');
-        const hiddenInput = document.querySelector('input[type="text"][style*="display: none"]');
+<script>
+const popup = document.getElementById('card-details-popup');
+const content = document.getElementById('card-details-popup-content');
+const closeBtn = document.getElementById('card-details-popup-close');
 
-        let lastBookId = null;
+document.addEventListener('click', e => {
+    const card = e.target.closest('.book-card');
+    if(!card) return;
 
-        function showPopup(card){
-            lastBookId = card.dataset.id;
-            content.innerHTML = `
-                <h3>${card.dataset.title}</h3>
-                <p><strong>Author(s):</strong> ${card.dataset.authors}</p>
-                <p><strong>Genres:</strong> ${card.dataset.genres}</p>
-                <p><strong>Rating:</strong> ${card.dataset.rating}</p>
-                <p><strong>Year:</strong> ${card.dataset.year}</p>
-                <p><strong>Pages:</strong> ${card.dataset.pages}</p>
-                <div class="description-scroll">${card.dataset.desc}</div>
-            `;
-            const rect = card.getBoundingClientRect();
-            let top = window.scrollY + rect.top;
-            let left = window.scrollX + rect.right + 10;
-            if(left + 320 > window.innerWidth) left = window.scrollX + rect.left - 330;
-            popup.style.top = top + "px";
-            popup.style.left = left + "px";
-            popup.style.display = "block";
-        }
+    // Populate popup
+    content.innerHTML = `<h3>${card.dataset.title}</h3>
+        <p>${card.dataset.authors}</p>
+        <div>${card.dataset.desc}</div>`;
 
-        function closePopup(){
-            popup.style.display = "none";
-            lastBookId = null;
-        }
+    // Position next to the card
+    const rect = card.getBoundingClientRect();
+    let top = window.scrollY + rect.top;
+    let left = window.scrollX + rect.right + 10;
+    if(left + 300 > window.innerWidth) left = window.scrollX + rect.left - 310;
 
-        closeBtn.addEventListener("click", closePopup);
-        document.addEventListener("keydown", e => { if(e.key==="Escape") closePopup(); });
-        document.addEventListener("click", e => {
-            if(!e.target.closest(".book-card") && !e.target.closest("#card-details-popup")) closePopup();
-        });
+    popup.style.top = top + 'px';
+    popup.style.left = left + 'px';
+    popup.style.display = 'block';
+});
 
-        document.addEventListener("click", e => {
-            const card = e.target.closest(".book-card");
-            if(!card) return;
-            showPopup(card);
-        });
+closeBtn.addEventListener('click', () => {
+    popup.style.display = 'none';
+});
+</script>
 
-        favBtn.addEventListener("click", e => {
-            if(!lastBookId) return;
-            hiddenInput.value = lastBookId;
-            hiddenInput.dispatchEvent(new Event('change'));
-            alert("Added to Favorites!");
-        });
-
-    })();
-    </script>
     """)
 
 demo.launch()
