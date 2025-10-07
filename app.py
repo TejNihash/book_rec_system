@@ -3,7 +3,7 @@ import pandas as pd
 import gradio as gr
 import random
 
-# ---------------- Load dataset ----------------
+# ---------- Load dataset ----------
 df = pd.read_csv("data_mini_books.csv")
 if "id" not in df.columns:
     df["id"] = df.index.astype(str)
@@ -11,226 +11,844 @@ if "id" not in df.columns:
 df["authors"] = df["authors"].apply(lambda x: ast.literal_eval(x) if isinstance(x, str) else x)
 df["genres"] = df["genres"].apply(lambda x: ast.literal_eval(x) if isinstance(x, str) else x)
 
+# Add additional book metrics
 df["rating"] = df.get("rating", [random.uniform(3.5, 4.8) for _ in range(len(df))])
 df["year"] = df.get("year", [random.randint(1990, 2023) for _ in range(len(df))])
 df["pages"] = df.get("pages", [random.randint(150, 600) for _ in range(len(df))])
 
-BOOKS_PER_LOAD = 12
+BOOKS_PER_LOAD = 12  # 2 rows × 6 columns
 
-# ---------------- Helpers ----------------
+# ---------- Helpers ----------
 def create_book_card_html(book):
     rating = book.get("rating", 0)
     stars = "⭐" * int(rating) + "☆" * (5 - int(rating))
     if rating % 1 >= 0.5:
-        stars = "⭐" * (int(rating)+1) + "☆" * (4-int(rating))
-    description = book.get("description", "No description available.")
+        stars = "⭐" * (int(rating) + 1) + "☆" * (4 - int(rating))
+    
+    description = book.get('description', 'No description available.')
+    
     return f"""
     <div class='book-card' data-id='{book["id"]}' data-title="{book['title']}" 
          data-authors="{', '.join(book['authors'])}" data-genres="{', '.join(book['genres'])}" 
          data-img="{book['image_url']}" data-desc="{description}"
          data-rating="{rating}" data-year="{book.get('year', 'N/A')}" data-pages="{book.get('pages', 'N/A')}">
         <div class='book-image-container'>
-            <img src="{book['image_url']}" onerror="this.src='https://via.placeholder.com/150x220/444/fff?text=No+Image'">
+            <img src="{book['image_url']}" onerror="this.src='https://via.placeholder.com/150x200/667eea/white?text=No+Image'">
             <div class='book-badge'>{book.get('year', 'N/A')}</div>
         </div>
         <div class='book-info'>
-            <div class='book-title'>{book['title']}</div>
-            <div class='book-authors'>by {', '.join(book['authors'])}</div>
+            <div class='book-title' title="{book['title']}">{book['title']}</div>
+            <div class='book-authors' title="{', '.join(book['authors'])}">by {', '.join(book['authors'])}</div>
             <div class='book-rating'>{stars} ({rating:.1f})</div>
+            <div class='book-meta'>
+                <span class='book-pages'>{book.get('pages', 'N/A')} pages</span>
+                <span class='book-genres'>{', '.join(book['genres'][:2])}{'...' if len(book['genres']) > 2 else ''}</span>
+            </div>
         </div>
     </div>
     """
 
-def build_books_grid_html(df_):
-    cards_html = [create_book_card_html(row) for _, row in df_.iterrows()]
+def build_books_grid_html(books_df):
+    if books_df.empty:
+        return "<div style='text-align: center; padding: 40px; color: #666;'>No books found</div>"
+    cards_html = [create_book_card_html(book) for _, book in books_df.iterrows()]
     return f"<div class='books-grid'>{''.join(cards_html)}</div>"
 
-def search_books(df_, query):
-    q = query.lower()
-    mask = df_["title"].str.lower().str.contains(q) | \
-           df_["authors"].apply(lambda x: any(q in a.lower() for a in x)) | \
-           df_["genres"].apply(lambda x: any(q in g.lower() for g in x))
-    return df_[mask].reset_index(drop=True)
+def search_books(search_query, current_random_books, current_display_books):
+    """Search books by title, author, or genre"""
+    if not search_query.strip():
+        return current_random_books.iloc[:BOOKS_PER_LOAD], gr.update(value=build_books_grid_html(current_random_books.iloc[:BOOKS_PER_LOAD]), visible=True), gr.update(visible=True), gr.update(visible=False)
+    
+    search_lower = search_query.lower()
+    
+    mask = (
+        df['title'].str.lower().str.contains(search_lower, na=False) |
+        df['authors'].apply(lambda authors: any(search_lower in author.lower() for author in authors)) |
+        df['genres'].apply(lambda genres: any(search_lower in genre.lower() for genre in genres))
+    )
+    
+    search_results = df[mask].reset_index(drop=True)
+    
+    if search_results.empty:
+        return pd.DataFrame(), gr.update(value="<div style='text-align: center; padding: 40px; color: #666;'>No books found matching your search</div>", visible=True), gr.update(visible=False), gr.update(visible=True)
+    
+    return search_results, gr.update(value=build_books_grid_html(search_results), visible=True), gr.update(visible=False), gr.update(visible=True)
 
-# ---------------- Gradio App ----------------
+# ---------- Favorites Functions ----------
+def add_to_favorites(book_id, favorites_df):
+    """Add book to favorites"""
+    book = df[df['id'] == book_id].iloc[0]
+    
+    if favorites_df.empty:
+        new_favorites = pd.DataFrame([book])
+    else:
+        if book_id not in favorites_df['id'].values:
+            new_favorites = pd.concat([favorites_df, pd.DataFrame([book])], ignore_index=True)
+        else:
+            new_favorites = favorites_df
+    
+    # Return first BOOKS_PER_LOAD favorites for display
+    display_favorites = new_favorites.iloc[:BOOKS_PER_LOAD]
+    html = build_books_grid_html(display_favorites)
+    
+    return new_favorites, display_favorites, gr.update(value=html), gr.update(visible=len(new_favorites) > BOOKS_PER_LOAD), len(new_favorites)
+
+def remove_from_favorites(book_id, favorites_df, favorites_display):
+    """Remove book from favorites"""
+    new_favorites = favorites_df[favorites_df['id'] != book_id].reset_index(drop=True)
+    
+    # Update display
+    if len(new_favorites) <= len(favorites_display):
+        display_favorites = new_favorites.iloc[:BOOKS_PER_LOAD]
+    else:
+        display_favorites = favorites_display
+    
+    html = build_books_grid_html(display_favorites)
+    
+    return new_favorites, display_favorites, gr.update(value=html), gr.update(visible=len(new_favorites) > len(display_favorites)), len(new_favorites)
+
+def load_more_favorites(favorites_df, favorites_display, page_idx):
+    """Load more favorites"""
+    start = page_idx * BOOKS_PER_LOAD
+    end = start + BOOKS_PER_LOAD
+    new_books = favorites_df.iloc[start:end]
+    
+    if new_books.empty:
+        return favorites_display, gr.update(value=build_books_grid_html(favorites_display)), gr.update(visible=False), page_idx
+    
+    combined = pd.concat([favorites_display, new_books], ignore_index=True)
+    html = build_books_grid_html(combined)
+    return combined, gr.update(value=html), gr.update(visible=True), page_idx + 1
+
+# ---------- Gradio UI ----------
 with gr.Blocks(css="""
-/* Grid and Cards */
-.books-section { border:1px solid #555; border-radius:12px; padding:16px; height:400px; overflow-y:auto; margin-bottom:20px; background:#222; }
-.books-grid { display:grid; grid-template-columns:repeat(6,1fr); gap:16px; }
-.book-card { background:#333; border-radius:12px; padding:10px; box-shadow:0 3px 10px rgba(0,0,0,0.5); cursor:pointer; color:#eee; height:100%; display:flex; flex-direction:column; transition:all 0.3s ease; }
-.book-card:hover { transform:translateY(-4px) scale(1.02); box-shadow:0 8px 20px rgba(0,0,0,0.7); border-color:#667eea; }
-.book-image-container { position:relative; margin-bottom:10px; }
-.book-card img { width:100%; height:180px; object-fit:cover; border-radius:8px; border:1px solid #666; }
-.book-badge { position:absolute; top:8px; right:8px; background:rgba(102,126,234,0.9); color:white; padding:2px 6px; border-radius:10px; font-size:10px; font-weight:bold;}
-.book-info { flex-grow:1; display:flex; flex-direction:column; gap:4px; }
-.book-title { font-size:13px; font-weight:700; color:#fff; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
-.book-authors { font-size:11px; color:#88c; overflow:hidden; display:-webkit-box; -webkit-line-clamp:1; -webkit-box-orient:vertical;}
-.book-rating { font-size:10px; color:#ffa500; }
+.books-section {
+    border: 1px solid #e0e0e0;
+    border-radius: 12px;
+    padding: 12px;
+    height: 450px;
+    overflow-y: auto;
+    margin-bottom: 20px;
+    background: linear-gradient(135deg, #f7f7f7 0%, #ffffff 100%);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+.books-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 12px;
+}
+.book-card {
+    background: #ffffff;
+    border-radius: 10px;
+    padding: 8px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.12);
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.3s ease;
+    border: 1px solid #eaeaea;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+.book-card:hover {
+    transform: translateY(-3px) scale(1.02);
+    box-shadow: 0 6px 16px rgba(0,0,0,0.2);
+    border-color: #667eea;
+}
+.book-image-container {
+    position: relative;
+    margin-bottom: 8px;
+}
+.book-card img {
+    width: 100%;
+    height: 160px;
+    object-fit: cover;
+    border-radius: 6px;
+    border: 1px solid #eee;
+}
+.book-badge {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    background: rgba(102, 126, 234, 0.9);
+    color: white;
+    padding: 2px 5px;
+    border-radius: 8px;
+    font-size: 9px;
+    font-weight: bold;
+}
+.book-info {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+.book-title { 
+    font-size: 12px;
+    font-weight: 700; 
+    color: #222; 
+    line-height: 1.2;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    margin-bottom: 2px;
+}
+.book-authors { 
+    font-size: 10px;
+    color: #667eea; 
+    font-weight: 600;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    margin-bottom: 2px;
+}
+.book-rating {
+    font-size: 9px;
+    color: #ffa500;
+    margin-bottom: 3px;
+}
+.book-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-top: auto;
+}
+.book-pages {
+    font-size: 9px;
+    color: #666;
+    font-weight: 500;
+}
+.book-genres {
+    font-size: 8px;
+    color: #888;
+    font-style: italic;
+}
+.load-more-section {
+    text-align: center;
+    margin: 8px 0;
+}
+.load-more-btn {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    padding: 8px 20px;
+    border-radius: 18px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+    font-size: 11px;
+}
+.load-more-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4);
+}
+.favorite-btn {
+    background: linear-gradient(135deg, #ed8936 0%, #dd6b20 100%);
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 18px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 12px rgba(237, 137, 54, 0.3);
+    margin-top: 8px;
+    font-size: 12px;
+}
+.favorite-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(237, 137, 54, 0.4);
+}
+.remove-favorite-btn {
+    background: linear-gradient(135deg, #f56565 0%, #e53e3e 100%);
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 18px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 12px rgba(245, 101, 101, 0.3);
+    margin-top: 8px;
+    font-size: 12px;
+}
+.remove-favorite-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(245, 101, 101, 0.4);
+}
+.search-btn {
+    background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 18px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 12px rgba(72, 187, 120, 0.3);
+    font-size: 12px;
+}
+.search-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(72, 187, 120, 0.4);
+}
+.clear-btn {
+    background: linear-gradient(135deg, #f56565 0%, #e53e3e 100%);
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 18px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 12px rgba(245, 101, 101, 0.3);
+    font-size: 12px;
+}
+.clear-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(245, 101, 101, 0.4);
+}
+.search-section {
+    background: linear-gradient(135deg, #edf2f7 0%, #f7fafc 100%);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 20px;
+    border: 1px solid #e2e8f0;
+}
+.search-header {
+    font-size: 16px;
+    font-weight: bold;
+    color: #2d3748;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.search-results-indicator {
+    background: #667eea;
+    color: white;
+    padding: 3px 10px;
+    border-radius: 16px;
+    font-size: 11px;
+    font-weight: 600;
+    margin-left: auto;
+}
+.section-title {
+    font-size: 18px;
+    font-weight: bold;
+    color: #2d3748;
+    margin-bottom: 12px;
+    border-left: 4px solid #667eea;
+    padding-left: 10px;
+}
+.favorites-count {
+    background: #ed8936;
+    color: white;
+    padding: 3px 10px;
+    border-radius: 16px;
+    font-size: 11px;
+    font-weight: 600;
+    margin-left: 8px;
+}
 
-/* Buttons */
-.load-more-btn, .search-btn { background:linear-gradient(135deg,#667eea 0%,#764ba2 100%); color:white; border:none; padding:10px 25px; border-radius:20px; font-weight:600; cursor:pointer; transition:all 0.3s ease; font-size:12px; }
-.load-more-btn:hover, .search-btn:hover { transform:translateY(-2px); }
-
-/* Popup */
-#card-details-popup { position:absolute; background:#111; color:#eee; padding:16px; border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,0.7); max-width:320px; z-index:9999; display:none; }
-#card-details-popup-close { position:absolute; top:6px; right:8px; cursor:pointer; font-weight:bold; font-size:18px; }
-.description-scroll { max-height:150px; overflow:auto; border:1px solid #444; padding:4px; border-radius:6px; margin-top:6px; }
+/* Popup Styles */
+.popup-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(5px);
+    z-index: 1000;
+}
+.popup-container {
+    display: none;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: #ffffff;
+    border-radius: 16px;
+    padding: 20px;
+    max-width: 650px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    border: 2px solid #667eea;
+    z-index: 1001;
+}
+.popup-close {
+    position: absolute;
+    top: 10px;
+    right: 14px;
+    cursor: pointer;
+    font-size: 22px;
+    font-weight: bold;
+    color: #222;
+    background: #f0f0f0;
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+    transition: all 0.2s ease;
+}
+.popup-close:hover {
+    background: #667eea;
+    color: white;
+}
+.popup-content {
+    line-height: 1.5;
+    font-size: 14px;
+    color: #222;
+}
+.detail-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin: 12px 0;
+    padding: 10px;
+    background: #f0f4ff;
+    border-radius: 8px;
+    border: 1px solid #d0d6ff;
+}
+.detail-stat {
+    text-align: center;
+}
+.detail-stat-value {
+    font-size: 14px;
+    font-weight: bold;
+    color: #667eea;
+}
+.detail-stat-label {
+    font-size: 10px;
+    color: #444;
+    margin-top: 2px;
+}
+.description-scroll {
+    max-height: 180px;
+    overflow-y: auto;
+    padding-right: 6px;
+    margin-top: 8px;
+}
+.description-scroll::-webkit-scrollbar {
+    width: 5px;
+}
+.description-scroll::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 3px;
+}
+.description-scroll::-webkit-scrollbar-thumb {
+    background: #667eea;
+    border-radius: 3px;
+}
+.description-scroll::-webkit-scrollbar-thumb:hover {
+    background: #5a6fd8;
+}
+.favorite-action-section {
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 2px solid #ed8936;
+    text-align: center;
+}
 """) as demo:
 
-    gr.Markdown("# 📚 Dark Book Hub")
-    gr.Markdown("### Explore curated books")
+    gr.Markdown("# 📚 Book Discovery Hub")
+    gr.Markdown("### Explore our curated collection of amazing books")
 
-    # ---------- Search ----------
-    search_input = gr.Textbox(label="Search (title, authors, genres)", placeholder="Type here...")
-    search_btn = gr.Button("Search", elem_classes="search-btn")
-    clear_search_btn = gr.Button("Clear", elem_classes="search-btn")
+    # === SEARCH SECTION ===
+    with gr.Column(elem_classes="search-section"):
+        gr.Markdown("### 🔍 Search Books")
+        with gr.Row():
+            search_input = gr.Textbox(
+                placeholder="Search by title, author, or genre...",
+                show_label=False,
+                container=False,
+                scale=4
+            )
+            search_btn = gr.Button("🔍 Search", elem_classes="search-btn")
+            clear_btn = gr.Button("🗑️ Clear", elem_classes="clear-btn", visible=False)
+        
+        search_indicator = gr.HTML(visible=False)
 
-    # ---------- Random Section ----------
-    gr.Markdown("## 🎲 Random Books")
-    random_books_container = gr.HTML(elem_classes="books-section")
-    random_load_more_btn = gr.Button("Load More Random", elem_classes="load-more-btn")
-    shuffle_btn = gr.Button("Shuffle Random", elem_classes="load-more-btn")
+    # === RANDOM BOOKS SECTION ===  
+    gr.Markdown("## 🎲 Books")
+    with gr.Column():
+        random_books_container = gr.HTML(elem_classes="books-section")
+        
+        with gr.Row():
+            load_more_btn = gr.Button("📚 Load More Books", elem_classes="load-more-btn")
+            shuffle_btn = gr.Button("🔀 Shuffle Books", elem_classes="load-more-btn")
 
-    # ---------- Popular Section ----------
+    # === POPULAR BOOKS SECTION ===
     gr.Markdown("## 📈 Popular Books")
-    popular_books_container = gr.HTML(elem_classes="books-section")
-    popular_load_more_btn = gr.Button("Load More Popular", elem_classes="load-more-btn")
+    with gr.Column():
+        popular_books_container = gr.HTML(elem_classes="books-section")
+        
+        with gr.Row():
+            popular_load_more_btn = gr.Button("📚 Load More Popular Books", elem_classes="load-more-btn")
 
-    # ---------- Favorites Section ----------
-    gr.Markdown("## ❤️ Favorites")
-    favorites_container = gr.HTML(elem_classes="books-section")
+    # === FAVORITES SECTION (AT BOTTOM) ===
+    with gr.Column():
+        favorites_header = gr.HTML("""
+        <div style="display: flex; align-items: center; margin-bottom: 12px;">
+            <h2 style="margin: 0; color: #2d3748; border-left: 4px solid #ed8936; padding-left: 10px;">⭐ Favorites</h2>
+            <div class="favorites-count" id="favorites-count">0 books</div>
+        </div>
+        """)
+        
+        favorites_container = gr.HTML(elem_classes="books-section", value="<div style='text-align: center; padding: 40px; color: #666;'>No favorite books yet. Click the ❤️ button in book details to add some!</div>")
+        
+        with gr.Row():
+            favorites_load_more_btn = gr.Button("📚 Load More Favorites", elem_classes="load-more-btn", visible=False)
 
-    # ---------- States ----------
+    # State for all sections
     random_books_state = gr.State(df.sample(frac=1).reset_index(drop=True))
     random_display_state = gr.State(pd.DataFrame())
     random_index_state = gr.State(0)
-
+    
     popular_books_state = gr.State(df.copy())
     popular_display_state = gr.State(pd.DataFrame())
     popular_index_state = gr.State(0)
+    
+    # Favorites state
+    favorites_state = gr.State(pd.DataFrame())
+    favorites_display_state = gr.State(pd.DataFrame())
+    favorites_index_state = gr.State(0)
 
-    favorites_state = gr.State(pd.DataFrame(columns=df.columns))
-    favorite_trigger = gr.Textbox(visible=False)  # Hidden bridge for JS→Python
+    # Search state
+    is_searching_state = gr.State(False)
+    search_results_state = gr.State(pd.DataFrame())
+
+    # Hidden components for favorites interaction
+    favorite_book_id = gr.Textbox(visible=False)
+    favorite_action = gr.Textbox(visible=False)
+    favorites_count_text = gr.Textbox(value="0 books")
 
     # ---------- Functions ----------
-    def initial_load(df_):
-        initial_books = df_.iloc[:BOOKS_PER_LOAD]
+    def load_more_random(loaded_books, display_books, page_idx, is_searching, search_results):
+        if is_searching:
+            start = page_idx * BOOKS_PER_LOAD
+            end = start + BOOKS_PER_LOAD
+            new_books = search_results.iloc[start:end]
+            if new_books.empty:
+                return display_books, gr.update(value=build_books_grid_html(display_books)), gr.update(visible=False), page_idx, is_searching, search_results
+            combined = pd.concat([display_books, new_books], ignore_index=True)
+            html = build_books_grid_html(combined)
+            return combined, gr.update(value=html), gr.update(visible=True), page_idx + 1, is_searching, search_results
+        else:
+            start = page_idx * BOOKS_PER_LOAD
+            end = start + BOOKS_PER_LOAD
+            new_books = loaded_books.iloc[start:end]
+            if new_books.empty:
+                return display_books, gr.update(value=build_books_grid_html(display_books)), gr.update(visible=False), page_idx, is_searching, search_results
+            combined = pd.concat([display_books, new_books], ignore_index=True)
+            html = build_books_grid_html(combined)
+            return combined, gr.update(value=html), gr.update(visible=True), page_idx + 1, is_searching, search_results
+
+    def load_more_popular(loaded_books, display_books, page_idx):
+        start = page_idx * BOOKS_PER_LOAD
+        end = start + BOOKS_PER_LOAD
+        new_books = loaded_books.iloc[start:end]
+        if new_books.empty:
+            return display_books, gr.update(value=build_books_grid_html(display_books)), gr.update(visible=False), page_idx
+        combined = pd.concat([display_books, new_books], ignore_index=True)
+        html = build_books_grid_html(combined)
+        return combined, gr.update(value=html), gr.update(visible=True), page_idx + 1
+
+    def shuffle_random_books(loaded_books, display_books, is_searching, search_results):
+        if is_searching:
+            return loaded_books, display_books, gr.update(value=build_books_grid_html(display_books)), is_searching, search_results
+        shuffled = loaded_books.sample(frac=1).reset_index(drop=True)
+        initial_books = shuffled.iloc[:BOOKS_PER_LOAD]
+        html = build_books_grid_html(initial_books)
+        return shuffled, initial_books, html, is_searching, search_results
+
+    # Search functions
+    def perform_search(search_query, current_random_books, current_display_books, is_searching, search_results):
+        if not search_query.strip():
+            return clear_search_handler(current_random_books, is_searching, search_results)
+        
+        search_results_df, books_html, load_more_visible, clear_visible = search_books(search_query, current_random_books, current_display_books)
+        
+        if search_results_df.empty:
+            indicator_html = "<div class='search-results-indicator'>No results</div>"
+        else:
+            indicator_html = f"<div class='search-results-indicator'>{len(search_results_df)} results</div>"
+        
+        return (
+            search_results_df, 
+            books_html, 
+            load_more_visible, 
+            gr.update(visible=clear_visible), 
+            gr.update(value=indicator_html, visible=True), 
+            True, 
+            search_results_df
+        )
+
+    def clear_search_handler(current_random_books, is_searching, search_results):
+        search_input_clear = gr.update(value="")
+        initial_books = current_random_books.iloc[:BOOKS_PER_LOAD]
+        books_html = gr.update(value=build_books_grid_html(initial_books))
+        load_more_visible = gr.update(visible=True)
+        clear_visible = gr.update(visible=False)
+        indicator_visible = gr.update(visible=False)
+        
+        return (
+            search_input_clear, 
+            initial_books, 
+            books_html, 
+            load_more_visible, 
+            clear_visible, 
+            indicator_visible, 
+            False, 
+            pd.DataFrame()
+        )
+
+    # Favorites functions
+    def handle_favorite_action(book_id, action, favorites_df, favorites_display, favorites_count):
+        if action == "add":
+            new_favorites, new_display, html, load_more_visible, count = add_to_favorites(book_id, favorites_df)
+            count_text = f"{count} book{'s' if count != 1 else ''}"
+            return new_favorites, new_display, html, load_more_visible, count_text
+        else:  # remove
+            new_favorites, new_display, html, load_more_visible, count = remove_from_favorites(book_id, favorites_df, favorites_display)
+            count_text = f"{count} book{'s' if count != 1 else ''}"
+            return new_favorites, new_display, html, load_more_visible, count_text
+
+    def load_more_favorites(favorites_df, favorites_display, page_idx):
+        start = page_idx * BOOKS_PER_LOAD
+        end = start + BOOKS_PER_LOAD
+        new_books = favorites_df.iloc[start:end]
+        
+        if new_books.empty:
+            return favorites_display, gr.update(value=build_books_grid_html(favorites_display)), gr.update(visible=False), page_idx
+        
+        combined = pd.concat([favorites_display, new_books], ignore_index=True)
+        html = build_books_grid_html(combined)
+        return combined, gr.update(value=html), gr.update(visible=True), page_idx + 1
+
+    # Event handlers
+    search_btn.click(
+        perform_search,
+        [search_input, random_books_state, random_display_state, is_searching_state, search_results_state],
+        [random_display_state, random_books_container, load_more_btn, clear_btn, search_indicator, is_searching_state, search_results_state]
+    )
+
+    clear_btn.click(
+        clear_search_handler,
+        [random_books_state, is_searching_state, search_results_state],
+        [search_input, random_display_state, random_books_container, load_more_btn, clear_btn, search_indicator, is_searching_state, search_results_state]
+    )
+
+    load_more_btn.click(
+        load_more_random,
+        [random_books_state, random_display_state, random_index_state, is_searching_state, search_results_state],
+        [random_display_state, random_books_container, load_more_btn, random_index_state, is_searching_state, search_results_state]
+    )
+
+    shuffle_btn.click(
+        shuffle_random_books,
+        [random_books_state, random_display_state, is_searching_state, search_results_state],
+        [random_books_state, random_display_state, random_books_container, is_searching_state, search_results_state]
+    )
+
+    popular_load_more_btn.click(
+        load_more_popular,
+        [popular_books_state, popular_display_state, popular_index_state],
+        [popular_display_state, popular_books_container, popular_load_more_btn, popular_index_state]
+    )
+
+    favorites_load_more_btn.click(
+        load_more_favorites,
+        [favorites_state, favorites_display_state, favorites_index_state],
+        [favorites_display_state, favorites_container, favorites_load_more_btn, favorites_index_state]
+    )
+
+    # Favorites action handler
+    def trigger_favorite_action(book_id, action, favorites_df, favorites_display, favorites_count):
+        if book_id and action:
+            return handle_favorite_action(book_id, action, favorites_df, favorites_display, favorites_count)
+        return favorites_df, favorites_display, favorites_container, favorites_load_more_btn, favorites_count
+
+    # Connect favorites action to Python function
+    favorite_book_id.change(
+        trigger_favorite_action,
+        [favorite_book_id, favorite_action, favorites_state, favorites_display_state, favorites_count_text],
+        [favorites_state, favorites_display_state, favorites_container, favorites_load_more_btn, favorites_count_text]
+    )
+
+    # Initialize all sections
+    def initial_load_random(loaded_books):
+        initial_books = loaded_books.iloc[:BOOKS_PER_LOAD]
+        html = build_books_grid_html(initial_books)
+        return initial_books, html, 1, False, pd.DataFrame()
+
+    def initial_load_popular(loaded_books):
+        initial_books = loaded_books.iloc[:BOOKS_PER_LOAD]
         html = build_books_grid_html(initial_books)
         return initial_books, html, 1
 
-    def load_more(loaded, display, idx):
-        start = idx*BOOKS_PER_LOAD
-        end = start+BOOKS_PER_LOAD
-        new_books = loaded.iloc[start:end]
-        if new_books.empty:
-            return display, gr.update(value=build_books_grid_html(display)), gr.update(visible=False), idx
-        combined = pd.concat([display,new_books],ignore_index=True)
-        html = build_books_grid_html(combined)
-        return combined, gr.update(value=html), gr.update(visible=True), idx+1
+    def initial_load_favorites():
+        return pd.DataFrame(), pd.DataFrame(), 0, "0 books"
 
-    def shuffle_books(loaded, display):
-        shuffled = loaded.sample(frac=1).reset_index(drop=True)
-        initial = shuffled.iloc[:BOOKS_PER_LOAD]
-        html = build_books_grid_html(initial)
-        return shuffled, initial, html, 1
+    # Set initial values
+    (random_display_state.value, random_books_container.value, 
+     random_index_state.value, is_searching_state.value, 
+     search_results_state.value) = initial_load_random(random_books_state.value)
+    
+    popular_display_state.value, popular_books_container.value, popular_index_state.value = initial_load_popular(popular_books_state.value)
+    
+    favorites_state.value, favorites_display_state.value, favorites_index_state.value, favorites_count_text.value = initial_load_favorites()
 
-    def search_random(query):
-        books = search_books(random_books_state.value, query)
-        initial = books.iloc[:BOOKS_PER_LOAD]
-        html = build_books_grid_html(initial)
-        return books, initial, html, 1
-
-    def clear_search_func():
-        books = random_books_state.value
-        initial = books.iloc[:BOOKS_PER_LOAD]
-        html = build_books_grid_html(initial)
-        return books, initial, html, 1
-
-    def add_to_favorites(book_id, all_books, favorites):
-        book_row = all_books[all_books["id"]==book_id]
-        if book_row.empty or book_id in favorites["id"].values:
-            return gr.update(value=build_books_grid_html(favorites)), favorites
-        new_fav = pd.concat([favorites, book_row], ignore_index=True)
-        return gr.update(value=build_books_grid_html(new_fav)), new_fav
-
-    # ---------- Event Handlers ----------
-    random_load_more_btn.click(load_more, [random_books_state, random_display_state, random_index_state],
-                              [random_display_state, random_books_container, random_load_more_btn, random_index_state])
-    shuffle_btn.click(shuffle_books, [random_books_state, random_display_state],
-                      [random_books_state, random_display_state, random_books_container, random_index_state])
-    popular_load_more_btn.click(load_more, [popular_books_state, popular_display_state, popular_index_state],
-                                [popular_display_state, popular_books_container, popular_load_more_btn, popular_index_state])
-    search_btn.click(search_random, [search_input], [random_books_state, random_display_state, random_books_container, random_index_state])
-    clear_search_btn.click(clear_search_func, [], [random_books_state, random_display_state, random_books_container, random_index_state])
-    favorite_trigger.change(add_to_favorites, [favorite_trigger, random_books_state, favorites_state], [favorites_container, favorites_state])
-
-    # ---------- Initial Load ----------
-    random_display_state.value, random_books_container.value, random_index_state.value = initial_load(random_books_state.value)
-    popular_display_state.value, popular_books_container.value, popular_index_state.value = initial_load(popular_books_state.value)
-
-    # ---------- Details Popup ----------
+    # ---------- FIXED POPUP WITH WORKING FAVORITES ----------
     gr.HTML("""
-    <div id="card-details-popup">
-        <span id="card-details-popup-close">&times;</span>
-        <div id="card-details-popup-content"></div>
-        <button id="add-to-favorites" style="margin-top:10px;background:#667eea;color:white;padding:6px 12px;border:none;border-radius:6px;cursor:pointer;">Add to Favorites</button>
+    <div class="popup-overlay" id="popup-overlay"></div>
+    <div class="popup-container" id="popup-container">
+        <span class="popup-close" id="popup-close">&times;</span>
+        <div class="popup-content" id="popup-content"></div>
     </div>
 
     <script>
-    (function(){
-        const popup = document.getElementById('card-details-popup');
-        const content = document.getElementById('card-details-popup-content');
-        const closeBtn = document.getElementById('card-details-popup-close');
-        const favBtn = document.getElementById('add-to-favorites');
-        const hiddenInput = document.querySelector('input[type="text"][style*="display: none"]');
+    const overlay = document.getElementById('popup-overlay');
+    const container = document.getElementById('popup-container');
+    const closeBtn = document.getElementById('popup-close');
+    const content = document.getElementById('popup-content');
 
-        let lastBookId = null;
+    let originalScrollPosition = 0;
+    let currentBookId = '';
+    let isInFavorites = false;
 
-        function showPopup(card){
-            lastBookId = card.dataset.id;
-            content.innerHTML = `
-                <h3>${card.dataset.title}</h3>
-                <p><strong>Author(s):</strong> ${card.dataset.authors}</p>
-                <p><strong>Genres:</strong> ${card.dataset.genres}</p>
-                <p><strong>Rating:</strong> ${card.dataset.rating}</p>
-                <p><strong>Year:</strong> ${card.dataset.year}</p>
-                <p><strong>Pages:</strong> ${card.dataset.pages}</p>
-                <div class="description-scroll">${card.dataset.desc}</div>
-            `;
-            const rect = card.getBoundingClientRect();
-            let top = window.scrollY + rect.top;
-            let left = window.scrollX + rect.right + 10;
-            if(left + 320 > window.innerWidth) left = window.scrollX + rect.left - 330;
-            popup.style.top = top + "px";
-            popup.style.left = left + "px";
-            popup.style.display = "block";
+    function escapeHtml(str) {
+        return str ? String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;') : "";
+    }
+
+    function formatText(text) {
+        if (!text) return 'No description available.';
+        return text.replace(/\\n/g, '<br>');
+    }
+
+    function triggerGradioFavorite(action) {
+        // This triggers the Python function via Gradio
+        const favoriteBookId = document.getElementById('favorite-book-id');
+        const favoriteAction = document.getElementById('favorite-action');
+        
+        if (favoriteBookId && favoriteAction) {
+            favoriteBookId.value = currentBookId;
+            favoriteAction.value = action;
+            
+            // Dispatch change events to trigger Gradio
+            favoriteBookId.dispatchEvent(new Event('change'));
+            favoriteAction.dispatchEvent(new Event('change'));
         }
+        
+        // Show feedback
+        const feedback = document.createElement('div');
+        feedback.style.cssText = 'position: fixed; top: 20px; right: 20px; background: #48bb78; color: white; padding: 12px 20px; border-radius: 8px; z-index: 1002; box-shadow: 0 4px 12px rgba(0,0,0,0.3);';
+        feedback.textContent = action === 'add' ? '❤️ Added to favorites!' : '🗑️ Removed from favorites!';
+        document.body.appendChild(feedback);
+        
+        setTimeout(() => {
+            document.body.removeChild(feedback);
+        }, 2000);
+    }
 
-        function closePopup(){
-            popup.style.display = "none";
-            lastBookId = null;
+    document.addEventListener('click', function(e) {
+        const card = e.target.closest('.book-card');
+        if (!card) return;
+        
+        originalScrollPosition = window.scrollY || document.documentElement.scrollTop;
+        currentBookId = card.dataset.id;
+        
+        const title = card.dataset.title;
+        const authors = card.dataset.authors;
+        const genres = card.dataset.genres;
+        const desc = card.dataset.desc;
+        const img = card.dataset.img;
+        const rating = card.dataset.rating || '0';
+        const year = card.dataset.year || 'N/A';
+        const pages = card.dataset.pages || 'N/A';
+        
+        const numRating = parseFloat(rating);
+        const fullStars = Math.floor(numRating);
+        const hasHalfStar = numRating % 1 >= 0.5;
+        let stars = '⭐'.repeat(fullStars);
+        if (hasHalfStar) stars += '½';
+        stars += '☆'.repeat(5 - fullStars - (hasHalfStar ? 1 : 0));
+        
+        // For now, assume book is not in favorites (you'd need to check against actual favorites data)
+        isInFavorites = false;
+        
+        content.innerHTML = `
+            <div style="display: flex; gap: 16px; align-items: flex-start; margin-bottom: 16px;">
+                <img src="${img}" style="width: 160px; height: auto; border-radius: 8px; object-fit: cover; box-shadow: 0 4px 12px rgba(0,0,0,0.2);">
+                <div style="flex: 1; color: #222;">
+                    <h2 style="margin: 0 0 10px 0; color: #1a202c; border-bottom: 2px solid #667eea; padding-bottom: 6px; font-size: 18px;">${escapeHtml(title)}</h2>
+                    <p style="margin: 0 0 6px 0; font-size: 14px;"><strong>Author(s):</strong> <span style="color: #667eea;">${escapeHtml(authors)}</span></p>
+                    <p style="margin: 0 0 6px 0; font-size: 14px;"><strong>Genres:</strong> <span style="color: #764ba2;">${escapeHtml(genres)}</span></p>
+                    <p style="margin: 0 0 6px 0; font-size: 14px;"><strong>Rating:</strong> ${stars} <strong style="color: #667eea;">${parseFloat(rating).toFixed(1)}</strong></p>
+                </div>
+            </div>
+            <div class="detail-stats">
+                <div class="detail-stat">
+                    <div class="detail-stat-value">${escapeHtml(year)}</div>
+                    <div class="detail-stat-label">PUBLICATION YEAR</div>
+                </div>
+                <div class="detail-stat">
+                    <div class="detail-stat-value">${escapeHtml(pages)}</div>
+                    <div class="detail-stat-label">PAGES</div>
+                </div>
+                <div class="detail-stat">
+                    <div class="detail-stat-value">${Math.ceil(parseInt(pages) / 250) || 'N/A'}</div>
+                    <div class="detail-stat-label">READING TIME (HOURS)</div>
+                </div>
+            </div>
+            <div style="margin-top: 12px;">
+                <h3 style="margin: 0 0 8px 0; color: #1a202c; font-size: 16px;">Description</h3>
+                <div class="description-scroll">
+                    ${formatText(escapeHtml(desc))}
+                </div>
+            </div>
+            <div class="favorite-action-section">
+                <button id="favorite-action-btn" class="${isInFavorites ? 'remove-favorite-btn' : 'favorite-btn'}" 
+                        onclick="triggerGradioFavorite('${isInFavorites ? 'remove' : 'add'}')">
+                    ${isInFavorites ? '❤️ Remove from Favorites' : '🤍 Add to Favorites'}
+                </button>
+            </div>
+        `;
+        
+        overlay.style.display = 'block';
+        container.style.display = 'block';
+        document.body.style.overflow = 'hidden';
+    });
+
+    function closePopup() {
+        overlay.style.display = 'none';
+        container.style.display = 'none';
+        document.body.style.overflow = 'auto';
+        window.scrollTo(0, originalScrollPosition);
+    }
+
+    closeBtn.addEventListener('click', closePopup);
+    overlay.addEventListener('click', closePopup);
+
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            closePopup();
         }
+    });
 
-        closeBtn.addEventListener("click", closePopup);
-        document.addEventListener("keydown", e => { if(e.key==="Escape") closePopup(); });
-        document.addEventListener("click", e => {
-            if(!e.target.closest(".book-card") && !e.target.closest("#card-details-popup")) closePopup();
-        });
-
-        document.addEventListener("click", e => {
-            const card = e.target.closest(".book-card");
-            if(!card) return;
-            showPopup(card);
-        });
-
-        favBtn.addEventListener("click", e => {
-            if(!lastBookId) return;
-            hiddenInput.value = lastBookId;
-            hiddenInput.dispatchEvent(new Event('change'));
-            alert("Added to Favorites!");
-        });
-
-    })();
+    container.addEventListener('click', function(e) {
+        e.stopPropagation();
+    });
     </script>
     """)
 
