@@ -1,7 +1,7 @@
 import ast
 import pandas as pd
-import random
 import gradio as gr
+import random
 
 # ---------- Load dataset ----------
 df = pd.read_csv("data_mini_books.csv")
@@ -10,6 +10,8 @@ if "id" not in df.columns:
 
 df["authors"] = df["authors"].apply(lambda x: ast.literal_eval(x) if isinstance(x, str) else x)
 df["genres"] = df["genres"].apply(lambda x: ast.literal_eval(x) if isinstance(x, str) else x)
+
+# Add additional book metrics
 df["rating"] = df.get("rating", [random.uniform(3.5, 4.8) for _ in range(len(df))])
 df["year"] = df.get("year", [random.randint(1990, 2023) for _ in range(len(df))])
 df["pages"] = df.get("pages", [random.randint(150, 600) for _ in range(len(df))])
@@ -56,8 +58,8 @@ with gr.Blocks(css="""
     border: 1px solid #e0e0e0;
     border-radius: 12px;
     padding: 16px;
-    height: 500px; 
-    overflow-y: auto; 
+    height: 500px; /* Fixed height */
+    overflow-y: auto; /* Internal scroll */
     margin-bottom: 15px;
     background: linear-gradient(135deg, #f7f7f7 0%, #ffffff 100%);
     box-shadow: 0 4px 12px rgba(0,0,0,0.1);
@@ -67,31 +69,130 @@ with gr.Blocks(css="""
     grid-template-columns: repeat(6, 1fr);
     gap: 16px;
 }
-.load-more-btn, .shuffle-btn {
-    margin-right: 10px;
-    padding: 8px 12px;
-    border-radius: 8px;
-    border: none;
-    background:#667eea;
-    color:white;
-    cursor:pointer;
+.book-card {
+    background: #ffffff;
+    border-radius: 12px;
+    padding: 10px;
+    box-shadow: 0 3px 10px rgba(0,0,0,0.15);
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.3s ease;
+    border: 1px solid #eaeaea;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
 }
+.book-card:hover {
+    transform: translateY(-4px) scale(1.02);
+    box-shadow: 0 8px 20px rgba(0,0,0,0.25);
+    border-color: #667eea;
+}
+.book-image-container {
+    position: relative;
+    margin-bottom: 10px;
+}
+.book-card img {
+    width: 100%;
+    height: 180px;
+    object-fit: cover;
+    border-radius: 8px;
+    border: 1px solid #eee;
+}
+.book-badge {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: rgba(102, 126, 234, 0.9);
+    color: white;
+    padding: 2px 6px;
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: bold;
+}
+.book-info {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.book-title { 
+    font-size: 13px; 
+    font-weight: 700; 
+    color: #222; 
+    line-height: 1.3;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    margin-bottom: 2px;
+}
+.book-authors { 
+    font-size: 11px; 
+    color: #667eea; 
+    font-weight: 600;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    margin-bottom: 3px;
+}
+.book-rating {
+    font-size: 10px;
+    color: #ffa500;
+    margin-bottom: 4px;
+}
+.book-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-top: auto;
+}
+.book-pages {
+    font-size: 10px;
+    color: #666;
+    font-weight: 500;
+}
+.book-genres {
+    font-size: 9px;
+    color: #888;
+    font-style: italic;
+}
+.load-more-section {
+    text-align: center;
+    margin: 20px 0;
+}
+.load-more-btn {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    padding: 12px 30px;
+    border-radius: 25px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+.load-more-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4);
+}
+
 #detail-overlay { 
     display:none; 
-    position:fixed;  
+    position:fixed; 
     top:0; 
     left:0; 
     width:100%; 
     height:100%; 
-    background:rgba(0,0,0,0.75);
+    background:rgba(255,255,255,0.95);
     z-index:1000; 
-    backdrop-filter: blur(4px);
+    backdrop-filter: blur(5px);
 }
 #detail-box { 
-    position:fixed;  
-    top:50%;         
-    left:50%;        
-    transform: translate(-50%, -50%); 
+    position:fixed; 
+    top:50%; 
+    left:50%; 
+    transform: translate(-50%, -50%);
     background:#ffffff;
     border-radius:16px; 
     padding:24px; 
@@ -117,6 +218,35 @@ with gr.Blocks(css="""
     display: flex;
     align-items: center;
     justify-content: center;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+}
+#detail-content { 
+    line-height:1.6; 
+    font-size:15px; 
+    color:#222; 
+}
+.detail-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin: 15px 0;
+    padding: 12px;
+    background: #f0f4ff;
+    border-radius: 8px;
+    border: 1px solid #d0d6ff;
+}
+.detail-stat {
+    text-align: center;
+}
+.detail-stat-value {
+    font-size: 16px;
+    font-weight: bold;
+    color: #667eea;
+}
+.detail-stat-label {
+    font-size: 11px;
+    color: #444;
+    margin-top: 2px;
 }
 .description-scroll {
     max-height: 200px;
@@ -125,6 +255,10 @@ with gr.Blocks(css="""
 }
 .description-scroll::-webkit-scrollbar {
     width: 6px;
+}
+.description-scroll::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 3px;
 }
 .description-scroll::-webkit-scrollbar-thumb {
     background: #667eea;
@@ -135,35 +269,23 @@ with gr.Blocks(css="""
 }
 """) as demo:
 
-    # ---------- Inside your gr.Blocks(...) ----------
     gr.Markdown("# 📚 Book Discovery Hub")
     gr.Markdown("### Explore our curated collection of amazing books")
-    
-    # ---------- Random Books Section ----------
-    gr.Markdown("## 🔀 Random Books")
-    random_books_state = gr.State(df.sample(frac=1).reset_index(drop=True))
-    random_display_state = gr.State(pd.DataFrame())
-    random_load_index = gr.State(0)
-    
-    # Wrap in a fixed-height scrollable box
-    random_container = gr.HTML("""<div class="books-section" id="random-books-container"></div>""")
-    
-    with gr.Row():
-        random_load_btn = gr.Button("📚 Load More", elem_classes="load-more-btn")
-        random_shuffle_btn = gr.Button("🔀 Shuffle", elem_classes="shuffle-btn")
 
-    # ---------- Popular Books Section ----------
-    gr.Markdown("## ⭐ Popular Books")
-    popular_books_state = gr.State(df.sort_values("rating", ascending=False).reset_index(drop=True))
-    popular_display_state = gr.State(pd.DataFrame())
-    popular_load_index = gr.State(0)
-    
-    popular_container = gr.HTML("""<div class="books-section" id="popular-books-container"></div>""")
-    
-    with gr.Row():
-        popular_load_btn = gr.Button("📚 Load More", elem_classes="load-more-btn")
-    
-    # ---------- Load More / Shuffle Functions ----------
+    # Single scrollable books section
+    with gr.Column():
+        books_container = gr.HTML(elem_classes="books-section")
+        
+        with gr.Row():
+            load_more_btn = gr.Button("📚 Load More Books", elem_classes="load-more-btn")
+            shuffle_btn = gr.Button("🔀 Shuffle Books")
+
+    # Books State
+    loaded_books_state = gr.State(df.sample(frac=1).reset_index(drop=True))
+    display_books_state = gr.State(pd.DataFrame())
+    load_index_state = gr.State(0)
+
+    # ---------- Functions ----------
     def load_more(loaded_books, display_books, page_idx):
         start = page_idx * BOOKS_PER_LOAD
         end = start + BOOKS_PER_LOAD
@@ -173,78 +295,62 @@ with gr.Blocks(css="""
         combined = pd.concat([display_books, new_books], ignore_index=True)
         html = build_books_grid_html(combined)
         return combined, gr.update(value=html), gr.update(visible=True), page_idx + 1
-    
+
     def shuffle_books(loaded_books, display_books):
         shuffled = loaded_books.sample(frac=1).reset_index(drop=True)
         initial_books = shuffled.iloc[:BOOKS_PER_LOAD]
         html = build_books_grid_html(initial_books)
         return shuffled, initial_books, html, 1
-    
-    # ---------- Event Handlers ----------
-    random_load_btn.click(
+
+    # Event handlers
+    load_more_btn.click(
         load_more,
-        [random_books_state, random_display_state, random_load_index],
-        [random_display_state, random_container, random_load_btn, random_load_index]
+        [loaded_books_state, display_books_state, load_index_state],
+        [display_books_state, books_container, load_more_btn, load_index_state]
     )
-    random_shuffle_btn.click(
+
+    shuffle_btn.click(
         shuffle_books,
-        [random_books_state, random_display_state],
-        [random_books_state, random_display_state, random_container, random_load_index]
+        [loaded_books_state, display_books_state],
+        [loaded_books_state, display_books_state, books_container, load_index_state]
     )
-    
-    popular_load_btn.click(
-        load_more,
-        [popular_books_state, popular_display_state, popular_load_index],
-        [popular_display_state, popular_container, popular_load_btn, popular_load_index]
-    )
-    
+
     # Initialize first load
     def initial_load(loaded_books):
         initial_books = loaded_books.iloc[:BOOKS_PER_LOAD]
         html = build_books_grid_html(initial_books)
         return initial_books, html, 1
-    
-    random_display_state.value, random_container.value, random_load_index.value = initial_load(random_books_state.value)
-    popular_display_state.value, popular_container.value, popular_load_index.value = initial_load(popular_books_state.value)
-    
 
+    display_books_state.value, books_container.value, load_index_state.value = initial_load(loaded_books_state.value)
 
-
-    # ---------- Popup Modal ----------
+    # ---------- Enhanced Detail Popup with Scroll Memory ----------
     gr.HTML("""
     <div id="detail-overlay">
-        <div id="detail-box" role="dialog" aria-modal="true" tabindex="-1">
+        <div id="detail-box">
             <span id="detail-close">&times;</span>
             <div id="detail-content"></div>
         </div>
     </div>
-
     <script>
     const overlay = document.getElementById('detail-overlay');
     const box = document.getElementById('detail-box');
     const closeBtn = document.getElementById('detail-close');
-    let scrollPos = 0;
+    let scrollPosition = 0; // Store scroll position
 
     function escapeHtml(str){return str?String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;'):"";}
-    function formatText(text) { return text ? text.replace(/\\n/g,'<br>') : 'No description available.'; }
 
-    function disableScroll() {
-        scrollPos = window.scrollY;
-        document.body.style.position = 'fixed';
-        document.body.style.top = `-${scrollPos}px`;
-        document.body.style.left = '0';
-        document.body.style.right = '0';
-    }
-    function enableScroll() {
-        document.body.style.position = '';
-        document.body.style.top = '';
-        window.scrollTo(0, scrollPos);
+    function formatText(text) {
+        if (!text) return 'No description available.';
+        return text.replace(/\\n/g, '<br>');
     }
 
-    document.addEventListener('click', e => {
+    document.addEventListener('click', e=>{
         const card = e.target.closest('.book-card');
         if(!card) return;
-
+        
+        // Store current scroll position BEFORE opening popup
+        scrollPosition = window.scrollY || document.documentElement.scrollTop;
+        
         const title = card.dataset.title;
         const authors = card.dataset.authors;
         const genres = card.dataset.genres;
@@ -253,14 +359,15 @@ with gr.Blocks(css="""
         const rating = card.dataset.rating || '0';
         const year = card.dataset.year || 'N/A';
         const pages = card.dataset.pages || 'N/A';
-
+        
+        // Generate star rating
         const numRating = parseFloat(rating);
         const fullStars = Math.floor(numRating);
         const hasHalfStar = numRating % 1 >= 0.5;
         let stars = '⭐'.repeat(fullStars);
-        if(hasHalfStar) stars += '½';
+        if (hasHalfStar) stars += '½';
         stars += '☆'.repeat(5 - fullStars - (hasHalfStar ? 1 : 0));
-
+        
         document.getElementById('detail-content').innerHTML = `
             <div style="display:flex;gap:20px;align-items:flex-start;margin-bottom:20px;">
                 <img src="${img}" style="width:200px;height:auto;border-radius:8px;object-fit:cover;box-shadow:0 4px 12px rgba(0,0,0,0.2);">
@@ -281,7 +388,7 @@ with gr.Blocks(css="""
                     <div class="detail-stat-label">PAGES</div>
                 </div>
                 <div class="detail-stat">
-                    <div class="detail-stat-value">${Math.ceil(parseInt(pages)/250)||'N/A'}</div>
+                    <div class="detail-stat-value">${Math.ceil(parseInt(pages) / 250) || 'N/A'}</div>
                     <div class="detail-stat-label">READING TIME (HOURS)</div>
                 </div>
             </div>
@@ -292,20 +399,26 @@ with gr.Blocks(css="""
                 </div>
             </div>
         `;
-
+        
         overlay.style.display = 'block';
-        disableScroll();
-        box.focus();
+        document.body.style.overflow = 'hidden';
     });
 
     function closePopup() {
         overlay.style.display = 'none';
-        enableScroll();
+        document.body.style.overflow = 'auto';
+        
+        // RESTORE SCROLL POSITION - Key fix!
+        window.scrollTo(0, scrollPosition);
     }
 
     closeBtn.addEventListener('click', closePopup);
-    overlay.addEventListener('click', e => { if(e.target===overlay) closePopup(); });
-    document.addEventListener('keydown', e => { if(e.key==='Escape') closePopup(); });
+    overlay.addEventListener('click', e=>{
+        if(e.target===overlay) closePopup();
+    });
+    document.addEventListener('keydown', e=>{
+        if(e.key==='Escape') closePopup();
+    });
     </script>
     """)
 
