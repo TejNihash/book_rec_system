@@ -65,20 +65,15 @@ def build_books_grid_html(books_df, is_favorites_section=False):
 
 # ---------- Favorites Functions ----------
 def add_to_favorites(book_id):
-    """Add a book to favorites"""
     global favorites_list
-    
-    # Find the book in dataframe
     book_match = df[df['id'] == book_id]
     if not book_match.empty:
         book_data = book_match.iloc[0].to_dict()
-        
-        # Check if already in favorites
-        if not any(fav['id'] == book_id for fav in favorites_list):
+        if book_id not in [b['id'] for b in favorites_list]:
             favorites_list.append(book_data)
-            print(f"✅ Added '{book_data['title']}' to favorites")
-    
-    return update_favorites_display()
+    # return updated state
+    return [b['id'] for b in favorites_list], update_favorites_display()
+
 
 def remove_from_favorites(book_id):
     """Remove a book from favorites"""
@@ -186,7 +181,14 @@ with gr.Blocks(css="""
     favorite_book_id = gr.Textbox(visible=False)
     toggle_favorite_btn = gr.Button("Toggle Favorite", visible=False)
 
+    favorite_book_id = gr.Textbox(visible=False)  # stores clicked book ID
+    hidden_fav_btn = gr.Button("Hidden Add to Fav", visible=False)
+
+
     # ---------- States ----------
+
+    # ---------- Favorites State ----------
+
     random_books_state = gr.State(df.sample(frac=1).reset_index(drop=True))
     random_display_state = gr.State(pd.DataFrame())
     random_index_state = gr.State(0)
@@ -195,7 +197,8 @@ with gr.Blocks(css="""
     popular_display_state = gr.State(pd.DataFrame())
     popular_index_state = gr.State(0)
 
-    favorites_state = gr.State(pd.DataFrame())
+    favorites_state = gr.State([])  # list of favorite book IDs
+
     favorites_display_state = gr.State(pd.DataFrame())
     favorites_index_state = gr.State(0)
 
@@ -267,6 +270,13 @@ with gr.Blocks(css="""
         outputs=[favorites_state, favorites_container, favorites_load_more_btn, favorites_header]
     )
 
+    hidden_fav_btn.click(
+        add_to_favorites,
+        inputs=[favorite_book_id],
+        outputs=[favorites_state, favorites_container]
+    )
+
+
     # ---------- Initial Load ----------
     def initial_load(df_):
         initial_books = df_.iloc[:BOOKS_PER_LOAD]
@@ -309,35 +319,19 @@ with gr.Blocks(css="""
     }
 
     function toggleFavorite(bookId) {
-        console.log('🎯 Toggling favorite for:', bookId);
-        currentBookId = bookId;
-        
-        // Find the hidden components
-        const favoriteIdInput = document.querySelector('input[type="text"][style*="display: none"]');
-        const toggleFavoriteBtn = Array.from(document.querySelectorAll('button')).find(btn => 
-            btn.textContent.includes('Toggle Favorite') && btn.style.display === 'none'
-        );
-        
-        if (favoriteIdInput && toggleFavoriteBtn) {
-            // Update the book ID
-            favoriteIdInput.value = bookId;
-            
-            // Trigger events
-            favoriteIdInput.dispatchEvent(new Event('input', { bubbles: true }));
-            favoriteIdInput.dispatchEvent(new Event('change', { bubbles: true }));
-            
-            // Click the toggle button
-            setTimeout(() => {
-                toggleFavoriteBtn.click();
-                console.log('✅ Favorite toggle triggered');
-                
-                // Update button text after a short delay
-                setTimeout(updateFavoriteButton, 300);
-            }, 100);
-        } else {
-            console.log('❌ Could not find favorite components');
+        // store bookId in hidden input
+        const favoriteInput = document.querySelector('input[type="text"][style*="display: none"]');
+        const hiddenBtn = Array.from(document.querySelectorAll('button'))
+            .find(b => b.textContent.includes('Hidden Add to Fav') && b.style.display==='none');
+        if (favoriteInput && hiddenBtn) {
+            favoriteInput.value = bookId;
+            favoriteInput.dispatchEvent(new Event('input', { bubbles:true }));
+            favoriteInput.dispatchEvent(new Event('change', { bubbles:true }));
+            hiddenBtn.click();
+            showFeedback('✅ Book added to favorites!');
         }
     }
+
 
     function updateFavoriteButton() {
         const button = document.querySelector('.favorite-btn');
@@ -445,8 +439,8 @@ with gr.Blocks(css="""
             </div>
             
             <div class="favorite-action-section">
-                <button class="${favoriteButtonClass}" onclick="toggleFavorite('${currentBookId}')">
-                    ${favoriteButtonText}
+                <button class="favorite-btn" onclick="toggleFavorite('${currentBookId}')">
+                    ❤️ Add to Favorites
                 </button>
             </div>
         `;
