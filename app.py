@@ -68,11 +68,13 @@ with gr.Blocks(css="""
 .load-more-btn { background:linear-gradient(135deg,#667eea 0%,#764ba2 100%); color:white; border:none; padding:10px 25px; border-radius:20px; font-weight:600; cursor:pointer; transition:all 0.3s ease; box-shadow:0 4px 12px rgba(102,126,234,0.3); font-size:12px; }
 .load-more-btn:hover { transform:translateY(-2px); box-shadow:0 6px 16px rgba(102,126,234,0.4); }
 
-/* Popup */
-#floating-portal-popup { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%) scale(0.8); z-index:99999; width:80%; max-width:700px; max-height:80vh; overflow-y:auto; background:#111; color:#eee; border-radius:16px; padding:24px; box-shadow:0 20px 60px rgba(0,0,0,0.7); opacity:0; transition: all 0.3s ease;}
+/* Popup next to card */
+#floating-portal-popup { position:absolute; z-index:99999; width:300px; max-height:400px; overflow-y:auto; background:#111; color:#eee; border-radius:16px; padding:16px; box-shadow:0 10px 30px rgba(0,0,0,0.7); display:none;}
 #floating-portal-popup h2, #floating-portal-popup p, #floating-portal-popup span { color:#eee; }
-#floating-portal-close { position:absolute; top:12px; right:16px; cursor:pointer; font-size:24px; font-weight:bold; color:#fff; background:#222; border-radius:50%; width:32px; height:32px; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 6px rgba(0,0,0,0.5); }
+#floating-portal-close { position:absolute; top:8px; right:8px; cursor:pointer; font-size:20px; font-weight:bold; color:#fff; background:#222; border-radius:50%; width:28px; height:28px; display:flex; align-items:center; justify-content:center; }
 #floating-portal-close:hover { background:#667eea; color:white; }
+#floating-portal-fav { margin-top:10px; padding:6px 12px; border:none; border-radius:12px; background:#667eea; color:white; cursor:pointer; font-weight:600; }
+#floating-portal-fav:hover { background:#764ba2; }
 """) as demo:
 
     gr.Markdown("# 📚 Dark Book Discovery Hub")
@@ -83,6 +85,7 @@ with gr.Blocks(css="""
     <div id="floating-portal-popup">
         <span id="floating-portal-close">&times;</span>
         <div id="floating-portal-content"></div>
+        <button id="floating-portal-fav">Add to Favorites</button>
     </div>
 
     <script>
@@ -90,49 +93,47 @@ with gr.Blocks(css="""
         const portal = document.getElementById('floating-portal-popup');
         const content = portal.querySelector('#floating-portal-content');
         const closeBtn = portal.querySelector('#floating-portal-close');
-        let lastScrollY = 0;
+        const favBtn = portal.querySelector('#floating-portal-fav');
+        let currentBookId = null;
 
-        function showPopup(html) {
-            content.innerHTML = html;
-            portal.style.opacity='1';
-            portal.style.transform='translate(-50%,-50%) scale(1)';
-            document.body.style.overflow='hidden';
-        }
+        closeBtn.addEventListener('click', ()=>portal.style.display='none');
+        document.addEventListener('keydown', e=>{ if(e.key==='Escape') portal.style.display='none'; });
 
-        function closePopup(){
-            portal.style.opacity='0';
-            portal.style.transform='translate(-50%,-50%) scale(0.8)';
-            document.body.style.overflow='auto';
-            window.scrollTo({top:lastScrollY, behavior:'auto'});
-            setTimeout(()=>content.innerHTML='',300);
-        }
-
-        closeBtn.addEventListener('click', closePopup);
-        document.addEventListener('keydown', e=>{ if(e.key==='Escape') closePopup(); });
-        portal.addEventListener('click', e=>e.stopPropagation());
-
-        // Delegate clicks on book cards in ANY section
+        // Delegate clicks on book cards
         document.addEventListener('click', function(e){
             const card = e.target.closest('.book-card');
             if(!card) return;
 
-            lastScrollY = window.scrollY || window.pageYOffset;
+            currentBookId = card.dataset.id;
 
             const html = `
-                <div style="display:flex; gap:20px; align-items:flex-start; margin-bottom:20px;">
-                    <img src="${card.dataset.img}" style="width:180px; height:auto; border-radius:8px; object-fit:cover;">
-                    <div style="flex:1;">
-                        <h2>${card.dataset.title}</h2>
-                        <p><strong>Author(s):</strong> ${card.dataset.authors}</p>
-                        <p><strong>Genres:</strong> ${card.dataset.genres}</p>
-                        <p><strong>Rating:</strong> ${card.dataset.rating}</p>
-                        <p><strong>Year:</strong> ${card.dataset.year}</p>
-                        <p><strong>Pages:</strong> ${card.dataset.pages}</p>
-                        <div class="description-scroll">${card.dataset.desc}</div>
-                    </div>
-                </div>
+                <h2>${card.dataset.title}</h2>
+                <p><strong>Author(s):</strong> ${card.dataset.authors}</p>
+                <p><strong>Genres:</strong> ${card.dataset.genres}</p>
+                <p><strong>Rating:</strong> ${card.dataset.rating}</p>
+                <p><strong>Year:</strong> ${card.dataset.year}</p>
+                <p><strong>Pages:</strong> ${card.dataset.pages}</p>
+                <div class="description-scroll">${card.dataset.desc}</div>
             `;
-            showPopup(html);
+            content.innerHTML = html;
+
+            // Position next to card
+            const rect = card.getBoundingClientRect();
+            let top = window.scrollY + rect.top;
+            let left = window.scrollX + rect.right + 10;
+            if(left + portal.offsetWidth > window.innerWidth) left = window.scrollX + rect.left - portal.offsetWidth - 10;
+
+            portal.style.top = top + 'px';
+            portal.style.left = left + 'px';
+            portal.style.display = 'block';
+        });
+
+        // Send book id to Python for adding to favorites
+        favBtn.addEventListener('click', ()=>{
+            if(currentBookId){
+                // Trigger Gradio event
+                window.dispatchEvent(new CustomEvent('add-to-fav',{detail:currentBookId}));
+            }
         });
     })();
     </script>
@@ -148,6 +149,11 @@ with gr.Blocks(css="""
     gr.Markdown("## 📈 Popular Books")
     popular_books_container = gr.HTML(elem_classes="books-section")
     popular_load_more_btn = gr.Button("📚 Load More Popular Books", elem_classes="load-more-btn")
+
+    # ---------- Favorites Section ----------
+    gr.Markdown("## 💖 Favorites")
+    favorites_container = gr.HTML(elem_classes="books-section")
+    favorites_state = gr.State([])
 
     # ---------- States ----------
     random_books_state = gr.State(df.sample(frac=1).reset_index(drop=True))
@@ -185,6 +191,14 @@ with gr.Blocks(css="""
         html = build_books_grid_html(initial_books)
         return shuffled, initial_books, html, 1
 
+    def add_to_favorites(book_id, fav_list):
+        if book_id not in fav_list:
+            fav_list.append(book_id)
+        # Get book info
+        book = df[df['id']==book_id].iloc[0]
+        html = build_books_grid_html(pd.DataFrame([book]))
+        return fav_list, gr.update(value=html)
+
     random_load_more_btn.click(load_more_random,
         [random_books_state, random_display_state, random_index_state],
         [random_display_state, random_books_container, random_load_more_btn, random_index_state]
@@ -199,6 +213,17 @@ with gr.Blocks(css="""
         [popular_books_state, popular_display_state, popular_index_state],
         [popular_display_state, popular_books_container, popular_load_more_btn, popular_index_state]
     )
+
+    # ---------- JS to Python Event ----------
+    demo.load(lambda: None, [], [], _js="""
+    window.addEventListener('add-to-fav', function(e){
+        const book_id = e.detail;
+        gradioApp().submit('add-fav-event', [book_id]);
+    });
+    """)
+
+    add_fav_btn = gr.Button(visible=False, elem_id="add-fav-event")  # hidden trigger
+    add_fav_btn.click(add_to_favorites, [add_fav_btn, favorites_state], [favorites_state, favorites_container])
 
     # ---------- Initial Load ----------
     def initial_load(df_):
