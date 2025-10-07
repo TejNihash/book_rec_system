@@ -265,22 +265,26 @@ with gr.Blocks(css="""
             return btn;
         }
 
-        function setHiddenFavoriteIdAndTrigger(bookId){
-            // try to grab direct DOM input, bypass shadow roots
-            let input = document.querySelector('#current-book-id input, #current-book-id textarea');
-            if (!input) {
-                // fallback: maybe it's directly rendered
-                input = document.getElementById('current-book-id');
-            }
-            if (!input) {
-                console.warn('Hidden favorite input not found in DOM!');
+        function setHiddenFavoriteIdAndTrigger(bookId) {
+            try {
+                // gradioApp() helps access elements inside the shadow root
+                const app = (typeof gradioApp === 'function') ? gradioApp() : document;
+                let input = app.querySelector('#current-book-id input, #current-book-id textarea, #current-book-id');
+        
+                if (!input) {
+                    console.warn('Hidden favorite input still not found in shadow DOM!');
+                    return false;
+                }
+        
+                input.value = bookId;
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+                input.dispatchEvent(new Event('change', { bubbles: true }));
+                console.log('✅ JS -> set hidden fav id:', bookId);
+                return true;
+            } catch (err) {
+                console.error('Error setting hidden fav id:', err);
                 return false;
             }
-            input.value = bookId;
-            input.dispatchEvent(new Event('input', { bubbles: true }));
-            input.dispatchEvent(new Event('change', { bubbles: true }));
-            console.log('JS -> set hidden fav id:', bookId);
-            return true;
         }
 
         // open popup next to clicked card
