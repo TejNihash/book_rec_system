@@ -404,88 +404,33 @@ with gr.Blocks(css="""
         <span class="popup-close" id="popup-close">&times;</span>
         <div class="popup-content" id="popup-content"></div>
     </div>
+
     
+
     <script>
+    let lastScrollY = 0;
+    
     const overlay = document.getElementById('popup-overlay');
     const container = document.getElementById('popup-container');
     const closeBtn = document.getElementById('popup-close');
     const content = document.getElementById('popup-content');
     
-    // Store original scroll position
-    let originalScrollPosition = 0;
-    
     function escapeHtml(str) {
-        return str ? String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;') : "";
+        return str ? String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;') : "";
     }
     
-    function formatText(text) {
-        if (!text) return 'No description available.';
-        return text.replace(/\\n/g, '<br>');
-    }
-    
-    function calculateSmartPosition() {
-        const viewportHeight = window.innerHeight;
-        const viewportWidth = window.innerWidth;
-        const popupHeight = container.offsetHeight;
-        const popupWidth = container.offsetWidth;
-        
-        const scrollY = window.scrollY;
-        
-        // Calculate available space in viewport
-        const availableTopSpace = scrollY;
-        const availableBottomSpace = document.documentElement.scrollHeight - (scrollY + viewportHeight);
-        
-        // Default: try to center in viewport
-        let topPosition = scrollY + (viewportHeight / 2) - (popupHeight / 2);
-        
-        // Adjust if popup would go off-screen
-        const minTop = scrollY + 20; // 20px from top of viewport
-        const maxTop = scrollY + viewportHeight - popupHeight - 20; // 20px from bottom
-            
-        if (topPosition < minTop) {
-            topPosition = minTop;
-        } else if (topPosition > maxTop) {
-            topPosition = maxTop;
-        }
-        
-        // Center horizontally
-        const leftPosition = (viewportWidth / 2) - (popupWidth / 2);
-        
-        return { top: topPosition, left: leftPosition };
-    }
-    
-    function showPopup() {
-        // Store current position before any changes
-        originalScrollPosition = window.scrollY || document.documentElement.scrollTop;
-        
-        // Show overlay first
-        overlay.style.display = 'block';
-        container.style.display = 'block';
-        
-        // Calculate and set smart position
-        const position = calculateSmartPosition();
-        container.style.position = 'absolute';
-        container.style.top = position.top + 'px';
-        container.style.left = position.left + 'px';
-        container.style.transform = 'none'; // Remove centering transform
-        
-        // Prevent background scrolling
-        document.body.style.overflow = 'hidden';
-    }
-    
-    function closePopup() {
-        overlay.style.display = 'none';
-        container.style.display = 'none';
-        
-        // Restore scrolling and position
-        document.body.style.overflow = 'auto';
-        window.scrollTo(0, originalScrollPosition);
-    }
-    
-    document.addEventListener('click', function(e) {
+    document.addEventListener('click', function(e){
         const card = e.target.closest('.book-card');
-        if (!card) return;
-        
+        if(!card) return;
+    
+        // Save current scroll position
+        lastScrollY = window.scrollY || window.pageYOffset;
+    
         const title = card.dataset.title;
         const authors = card.dataset.authors;
         const genres = card.dataset.genres;
@@ -494,73 +439,59 @@ with gr.Blocks(css="""
         const rating = card.dataset.rating || '0';
         const year = card.dataset.year || 'N/A';
         const pages = card.dataset.pages || 'N/A';
-        
-        // Generate star rating
+    
         const numRating = parseFloat(rating);
         const fullStars = Math.floor(numRating);
         const hasHalfStar = numRating % 1 >= 0.5;
         let stars = '⭐'.repeat(fullStars);
-        if (hasHalfStar) stars += '½';
+        if(hasHalfStar) stars += '½';
         stars += '☆'.repeat(5 - fullStars - (hasHalfStar ? 1 : 0));
-        
+    
+        // Fill popup content
         content.innerHTML = `
-            <div style="display: flex; gap: 20px; align-items: flex-start; margin-bottom: 20px;">
-                <img src="${img}" style="width: 180px; height: auto; border-radius: 8px; object-fit: cover; box-shadow: 0 4px 12px rgba(0,0,0,0.2);">
-                <div style="flex: 1; color: #222;">
-                    <h2 style="margin: 0 0 12px 0; color: #1a202c; border-bottom: 2px solid #667eea; padding-bottom: 8px;">${escapeHtml(title)}</h2>
-                    <p style="margin: 0 0 8px 0; font-size: 15px;"><strong>Author(s):</strong> <span style="color: #667eea;">${escapeHtml(authors)}</span></p>
-                    <p style="margin: 0 0 8px 0; font-size: 15px;"><strong>Genres:</strong> <span style="color: #764ba2;">${escapeHtml(genres)}</span></p>
-                    <p style="margin: 0 0 8px 0; font-size: 15px;"><strong>Rating:</strong> ${stars} <strong style="color: #667eea;">${parseFloat(rating).toFixed(1)}</strong></p>
+            <div style="display:flex; gap:20px; align-items:flex-start; margin-bottom:20px;">
+                <img src="${img}" style="width:180px; height:auto; border-radius:8px; object-fit:cover;">
+                <div style="flex:1; color:#222;">
+                    <h2 style="margin:0 0 12px 0; border-bottom:2px solid #667eea; padding-bottom:8px;">${escapeHtml(title)}</h2>
+                    <p><strong>Author(s):</strong> <span style="color:#667eea;">${escapeHtml(authors)}</span></p>
+                    <p><strong>Genres:</strong> <span style="color:#764ba2;">${escapeHtml(genres)}</span></p>
+                    <p><strong>Rating:</strong> ${stars} <strong style="color:#667eea;">${parseFloat(rating).toFixed(1)}</strong></p>
                 </div>
             </div>
-            <div class="detail-stats">
-                <div class="detail-stat">
-                    <div class="detail-stat-value">${escapeHtml(year)}</div>
-                    <div class="detail-stat-label">PUBLICATION YEAR</div>
-                </div>
-                <div class="detail-stat">
-                    <div class="detail-stat-value">${escapeHtml(pages)}</div>
-                    <div class="detail-stat-label">PAGES</div>
-                </div>
-                <div class="detail-stat">
-                    <div class="detail-stat-value">${Math.ceil(parseInt(pages) / 250) || 'N/A'}</div>
-                    <div class="detail-stat-label">READING TIME (HOURS)</div>
-                </div>
-            </div>
-            <div style="margin-top: 15px;">
-                <h3 style="margin: 0 0 10px 0; color: #1a202c; font-size: 16px;">Description</h3>
-                <div class="description-scroll">
-                    ${formatText(escapeHtml(desc))}
-                </div>
-            </div>
-            `;
-        
-        showPopup();
+            <div class="description-scroll">${escapeHtml(desc).replace(/\n/g,'<br>')}</div>
+        `;
+    
+        // Show popup
+        overlay.style.display = 'block';
+        container.style.display = 'block';
+    
+        // Optional: prevent page scroll while popup is open
+        document.body.style.overflow = 'hidden';
     });
+    
+    // Close popup and restore scroll
+    function closePopup(){
+        overlay.style.display = 'none';
+        container.style.display = 'none';
+    
+        document.body.style.overflow = 'auto';
+    
+        // Restore scroll position
+        window.scrollTo({ top: lastScrollY, behavior: 'auto' });
+    }
     
     closeBtn.addEventListener('click', closePopup);
     overlay.addEventListener('click', closePopup);
-    
-    document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape') {
-            closePopup();
-        }
-    });
-    
-    // Prevent popup from closing when clicking inside it
-    container.addEventListener('click', function(e) {
-        e.stopPropagation();
-    });
-    
-    // Recalculate position on window resize
-    window.addEventListener('resize', function() {
-        if (container.style.display === 'block') {
-            const position = calculateSmartPosition();
-            container.style.top = position.top + 'px';
-            container.style.left = position.left + 'px';
-        }
-    });
+    document.addEventListener('keydown', e => { if(e.key==='Escape') closePopup(); });
+    container.addEventListener('click', e => e.stopPropagation());
     </script>
+
+
+
+
+
+
+
     """)
 
 
