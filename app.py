@@ -370,6 +370,7 @@ with gr.Blocks(css="""
     popular_display_state.value, popular_books_container.value, popular_index_state.value = initial_load_popular(popular_books_state.value)
 
     # ---------- COMPLETELY HIJACKED Detail Popup - NO SCROLLING NEEDED ----------
+# ---------- FIXED POPUP IN VIEWPORT CENTER (No Scroll Movement) ----------
     gr.HTML("""
     <div id="detail-overlay">
         <div id="detail-box">
@@ -377,22 +378,46 @@ with gr.Blocks(css="""
             <div id="detail-content"></div>
         </div>
     </div>
+    
     <script>
     const overlay = document.getElementById('detail-overlay');
     const box = document.getElementById('detail-box');
     const closeBtn = document.getElementById('detail-close');
-
-    function escapeHtml(str){return str?String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;'):"";}
-
-    function formatText(text) {
-        if (!text) return 'No description available.';
-        return text.replace(/\\n/g, '<br>');
+    let scrollPos = 0; // store scroll position
+    
+    function escapeHtml(str){
+        return str ? String(str)
+            .replace(/&/g,'&amp;')
+            .replace(/</g,'&lt;')
+            .replace(/>/g,'&gt;')
+            .replace(/"/g,'&quot;')
+            .replace(/'/g,'&#039;') : "";
     }
-
-    document.addEventListener('click', e=>{
+    
+    function formatText(text){
+        return text ? text.replace(/\\n/g,'<br>') : 'No description available.';
+    }
+    
+    function disableScroll() {
+        scrollPos = window.scrollY;
+        document.body.style.position = 'fixed';
+        document.body.style.top = `-${scrollPos}px`;
+        document.body.style.left = '0';
+        document.body.style.right = '0';
+    }
+    
+    function enableScroll() {
+        document.body.style.position = '';
+        document.body.style.top = '';
+        window.scrollTo(0, scrollPos);
+    }
+    
+    // handle click
+    document.addEventListener('click', e => {
         const card = e.target.closest('.book-card');
-        if(!card) return;
-        
+        if (!card) return;
+    
+        // fill content
         const title = card.dataset.title;
         const authors = card.dataset.authors;
         const genres = card.dataset.genres;
@@ -401,19 +426,18 @@ with gr.Blocks(css="""
         const rating = card.dataset.rating || '0';
         const year = card.dataset.year || 'N/A';
         const pages = card.dataset.pages || 'N/A';
-        
-        // Generate star rating
+    
         const numRating = parseFloat(rating);
         const fullStars = Math.floor(numRating);
         const hasHalfStar = numRating % 1 >= 0.5;
         let stars = '⭐'.repeat(fullStars);
         if (hasHalfStar) stars += '½';
         stars += '☆'.repeat(5 - fullStars - (hasHalfStar ? 1 : 0));
-        
+    
         document.getElementById('detail-content').innerHTML = `
             <div style="display:flex;gap:20px;align-items:flex-start;margin-bottom:20px;">
                 <img src="${img}" style="width:200px;height:auto;border-radius:8px;object-fit:cover;box-shadow:0 4px 12px rgba(0,0,0,0.2);">
-                <div style="flex:1; color:#222;">
+                <div style="flex:1;color:#222;">
                     <h2 style="margin:0 0 12px 0;color:#1a202c;border-bottom:2px solid #667eea;padding-bottom:8px;">${escapeHtml(title)}</h2>
                     <p style="margin:0 0 8px 0;font-size:15px;"><strong>Author(s):</strong> <span style="color:#667eea;">${escapeHtml(authors)}</span></p>
                     <p style="margin:0 0 8px 0;font-size:15px;"><strong>Genres:</strong> <span style="color:#764ba2;">${escapeHtml(genres)}</span></p>
@@ -430,7 +454,7 @@ with gr.Blocks(css="""
                     <div class="detail-stat-label">PAGES</div>
                 </div>
                 <div class="detail-stat">
-                    <div class="detail-stat-value">${Math.ceil(parseInt(pages) / 250) || 'N/A'}</div>
+                    <div class="detail-stat-value">${Math.ceil(parseInt(pages)/250) || 'N/A'}</div>
                     <div class="detail-stat-label">READING TIME (HOURS)</div>
                 </div>
             </div>
@@ -441,25 +465,24 @@ with gr.Blocks(css="""
                 </div>
             </div>
         `;
-        
-        // COMPLETE HIJACK - Show popup right where user is, NO SCROLLING
+    
+        // show overlay in place without any scroll movement
         overlay.style.display = 'block';
-        // Don't touch body overflow - let user scroll naturally if they want
+        disableScroll(); // freeze background
     });
-
+    
     function closePopup() {
         overlay.style.display = 'none';
-        // No scroll restoration needed since we never moved
+        enableScroll(); // restore scroll position
     }
-
+    
     closeBtn.addEventListener('click', closePopup);
-    overlay.addEventListener('click', e=>{
-        if(e.target===overlay) closePopup();
-    });
-    document.addEventListener('keydown', e=>{
-        if(e.key==='Escape') closePopup();
-    });
+    overlay.addEventListener('click', e => { if (e.target === overlay) closePopup(); });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closePopup(); });
     </script>
     """)
+
+
+
 
 demo.launch()
