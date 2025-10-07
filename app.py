@@ -187,15 +187,16 @@ with gr.Blocks(css="""
 }
 
 /* OPTION 1: Viewport-centered popup - NO SCROLLING */
-.popup-overlay, .popup-container {
-    position: fixed !important;
-    top: 50%;
-    left: 50%;
+/* Popup overlay & container */
+#popup-overlay, #popup-container {
+    position: fixed !important; /* always relative to viewport */
+    top: 50% !important;
+    left: 50% !important;
     transform: translate(-50%, -50%) !important;
-    z-index: 9999;
+    z-index: 9999 !important;
 }
 
-.popup-overlay {
+#popup-overlay {
     width: 100vw;
     height: 100vh;
     background: rgba(255, 255, 255, 0.95);
@@ -203,7 +204,7 @@ with gr.Blocks(css="""
     display: none;
 }
 
-.popup-container {
+#popup-container {
     max-width: 700px;
     width: 90%;
     max-height: 80vh;
@@ -215,6 +216,7 @@ with gr.Blocks(css="""
     box-shadow: 0 20px 60px rgba(0,0,0,0.3);
     border: 2px solid #667eea;
 }
+
 
 .popup-close {
     position: absolute;
@@ -287,6 +289,16 @@ with gr.Blocks(css="""
     background: #5a6fd8;
 }
 """) as demo:
+
+
+    gr.HTML("""
+    <div class="popup-overlay" id="popup-overlay"></div>
+    <div class="popup-container" id="popup-container">
+        <span class="popup-close" id="popup-close">&times;</span>
+        <div class="popup-content" id="popup-content"></div>
+    </div>
+    """, elem_id="popup-top-level")
+
 
     gr.Markdown("# 📚 Book Discovery Hub")
     gr.Markdown("### Explore our curated collection of amazing books")
@@ -402,10 +414,9 @@ with gr.Blocks(css="""
             .replace(/'/g, '&#039;') : "";
     }
     
-    // Display popup
-    document.addEventListener('click', function(e) {
+    document.addEventListener('click', function(e){
         const card = e.target.closest('.book-card');
-        if (!card) return;
+        if(!card) return;
     
         const title = card.dataset.title;
         const authors = card.dataset.authors;
@@ -420,29 +431,46 @@ with gr.Blocks(css="""
         const fullStars = Math.floor(numRating);
         const hasHalfStar = numRating % 1 >= 0.5;
         let stars = '⭐'.repeat(fullStars);
-        if (hasHalfStar) stars += '½';
+        if(hasHalfStar) stars += '½';
         stars += '☆'.repeat(5 - fullStars - (hasHalfStar ? 1 : 0));
     
+        // Fill popup content
         content.innerHTML = `
-            <div style="display: flex; gap: 20px; align-items: flex-start; margin-bottom: 20px;">
-                <img src="${img}" style="width: 180px; height: auto; border-radius: 8px; object-fit: cover;">
-                <div style="flex: 1; color: #222;">
-                    <h2 style="margin: 0 0 12px 0;">${escapeHtml(title)}</h2>
-                    <p><strong>Author(s):</strong> <span style="color: #667eea;">${escapeHtml(authors)}</span></p>
-                    <p><strong>Genres:</strong> <span style="color: #764ba2;">${escapeHtml(genres)}</span></p>
-                    <p><strong>Rating:</strong> ${stars} <strong>${parseFloat(rating).toFixed(1)}</strong></p>
+            <div style="display:flex; gap:20px; align-items:flex-start; margin-bottom:20px;">
+                <img src="${img}" style="width:180px; height:auto; border-radius:8px; object-fit:cover;">
+                <div style="flex:1; color:#222;">
+                    <h2 style="margin:0 0 12px 0; border-bottom:2px solid #667eea; padding-bottom:8px;">${escapeHtml(title)}</h2>
+                    <p><strong>Author(s):</strong> <span style="color:#667eea;">${escapeHtml(authors)}</span></p>
+                    <p><strong>Genres:</strong> <span style="color:#764ba2;">${escapeHtml(genres)}</span></p>
+                    <p><strong>Rating:</strong> ${stars} <strong style="color:#667eea;">${parseFloat(rating).toFixed(1)}</strong></p>
                 </div>
             </div>
-            <div class="description-scroll">${escapeHtml(desc).replace(/\\n/g, '<br>')}</div>
+            <div class="detail-stats" style="display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin:15px 0; padding:12px; background:#f0f4ff; border-radius:8px; border:1px solid #d0d6ff;">
+                <div class="detail-stat" style="text-align:center;">
+                    <div class="detail-stat-value" style="font-size:16px;font-weight:bold;color:#667eea;">${escapeHtml(year)}</div>
+                    <div class="detail-stat-label" style="font-size:11px;color:#444;margin-top:2px;">PUBLICATION YEAR</div>
+                </div>
+                <div class="detail-stat" style="text-align:center;">
+                    <div class="detail-stat-value" style="font-size:16px;font-weight:bold;color:#667eea;">${escapeHtml(pages)}</div>
+                    <div class="detail-stat-label" style="font-size:11px;color:#444;margin-top:2px;">PAGES</div>
+                </div>
+                <div class="detail-stat" style="text-align:center;">
+                    <div class="detail-stat-value" style="font-size:16px;font-weight:bold;color:#667eea;">${Math.ceil(parseInt(pages)/250) || 'N/A'}</div>
+                    <div class="detail-stat-label" style="font-size:11px;color:#444;margin-top:2px;">READING TIME (HOURS)</div>
+                </div>
+            </div>
+            <div style="margin-top:15px;">
+                <h3 style="margin:0 0 10px 0; font-size:16px;">Description</h3>
+                <div class="description-scroll">${escapeHtml(desc).replace(/\\n/g,'<br>')}</div>
+            </div>
         `;
     
         overlay.style.display = 'block';
         container.style.display = 'block';
-        document.body.style.overflow = 'hidden'; // prevent background scroll
+        document.body.style.overflow = 'hidden';
     });
     
-    // Close popup
-    function closePopup() {
+    function closePopup(){
         overlay.style.display = 'none';
         container.style.display = 'none';
         document.body.style.overflow = 'auto';
@@ -451,8 +479,9 @@ with gr.Blocks(css="""
     closeBtn.addEventListener('click', closePopup);
     overlay.addEventListener('click', closePopup);
     document.addEventListener('keydown', e => { if(e.key==='Escape') closePopup(); });
-    container.addEventListener('click', e => e.stopPropagation()); // don't close when clicking inside
+    container.addEventListener('click', e => e.stopPropagation());
     </script>
+
     """)
 
 
