@@ -250,44 +250,68 @@ with gr.Blocks(css="""
     # ---------- Fixed Detail Popup with Viewport Positioning ----------
     gr.HTML("""
     <div id="detail-overlay">
-        <div id="detail-box">
+        <div id="detail-box" role="dialog" aria-modal="true" tabindex="-1">
             <span id="detail-close">&times;</span>
             <div id="detail-content"></div>
         </div>
     </div>
+
     <script>
     const overlay = document.getElementById('detail-overlay');
     const box = document.getElementById('detail-box');
     const closeBtn = document.getElementById('detail-close');
     
     function escapeHtml(str){return str?String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;'):"";}
+    function formatText(text) { return text ? text.replace(/\\n/g,'<br>') : 'No description available.'; }
     
-    function formatText(text) {
-        if (!text) return 'No description available.';
-        return text.replace(/\\n/g, '<br>');
+    // Block background scroll
+    function disableScroll() {
+        document.body.style.overflow = 'hidden';
+        window.addEventListener('wheel', preventDefault, { passive: false });
+        window.addEventListener('touchmove', preventDefault, { passive: false });
+    }
+    function enableScroll() {
+        document.body.style.overflow = '';
+        window.removeEventListener('wheel', preventDefault, { passive: false });
+        window.removeEventListener('touchmove', preventDefault, { passive: false });
+    }
+    function preventDefault(e){ e.preventDefault(); }
+    
+    // Focus trap inside modal
+    function trapFocus(e) {
+        const focusable = overlay.querySelectorAll('a, button, input, select, textarea, [tabindex]:not([tabindex="-1"])');
+        if(focusable.length === 0) return;
+        const first = focusable[0], last = focusable[focusable.length-1];
+        if(e.key === 'Tab') {
+            if(e.shiftKey) {
+                if(document.activeElement === first) { last.focus(); e.preventDefault(); }
+            } else {
+                if(document.activeElement === last) { first.focus(); e.preventDefault(); }
+            }
+        }
+        if(e.key === 'Escape') closePopup();
     }
     
-    document.addEventListener('click', e=>{
+    document.addEventListener('click', e => {
         const card = e.target.closest('.book-card');
         if(!card) return;
-        
+    
         const title = card.dataset.title;
         const authors = card.dataset.authors;
         const genres = card.dataset.genres;
         const desc = card.dataset.desc;
         const img = card.dataset.img;
         const rating = card.dataset.rating || '0';
-            const year = card.dataset.year || 'N/A';
+        const year = card.dataset.year || 'N/A';
         const pages = card.dataset.pages || 'N/A';
-        
-        // Generate star rating
+
         const numRating = parseFloat(rating);
         const fullStars = Math.floor(numRating);
         const hasHalfStar = numRating % 1 >= 0.5;
         let stars = '⭐'.repeat(fullStars);
-        if (hasHalfStar) stars += '½';
+        if(hasHalfStar) stars += '½';
         stars += '☆'.repeat(5 - fullStars - (hasHalfStar ? 1 : 0));
-        
+    
         document.getElementById('detail-content').innerHTML = `
             <div style="display:flex;gap:20px;align-items:flex-start;margin-bottom:20px;">
                 <img src="${img}" style="width:200px;height:auto;border-radius:8px;object-fit:cover;box-shadow:0 4px 12px rgba(0,0,0,0.2);">
@@ -308,9 +332,9 @@ with gr.Blocks(css="""
                     <div class="detail-stat-label">PAGES</div>
                 </div>
                 <div class="detail-stat">
-                    <div class="detail-stat-value">${Math.ceil(parseInt(pages) / 250) || 'N/A'}</div>
+                    <div class="detail-stat-value">${Math.ceil(parseInt(pages)/250)||'N/A'}</div>
                     <div class="detail-stat-label">READING TIME (HOURS)</div>
-                    </div>
+                </div>
             </div>
             <div style="margin-top:15px;">
                 <h3 style="margin:0 0 10px 0;color:#1a202c;font-size:16px;">Description</h3>
@@ -319,26 +343,20 @@ with gr.Blocks(css="""
                 </div>
             </div>
         `;
-        
-        // Show the overlay - positioning is now handled by CSS fixed positioning
+    
         overlay.style.display = 'block';
-        
-        // Prevent background scrolling when popup is open
-        document.body.style.overflow = 'hidden';
+        disableScroll();
+        box.focus();
     });
     
     function closePopup() {
         overlay.style.display = 'none';
-        document.body.style.overflow = 'auto'; // Restore scrolling
+        enableScroll();
     }
     
     closeBtn.addEventListener('click', closePopup);
-    overlay.addEventListener('click', e=>{
-        if(e.target===overlay) closePopup();
-    });
-    document.addEventListener('keydown', e=>{
-        if(e.key==='Escape') closePopup();
-    });
+    overlay.addEventListener('click', e => { if(e.target===overlay) closePopup(); });
+    document.addEventListener('keydown', trapFocus);
     </script>
     """)
 
