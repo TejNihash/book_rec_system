@@ -196,27 +196,31 @@ with gr.Blocks(css="""
     z-index: 9999 !important;
 }
 
-#popup-overlay {
-    width: 100vw;
-    height: 100vh;
+.popup-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
     background: rgba(255, 255, 255, 0.95);
     backdrop-filter: blur(5px);
-    display: none;
+    z-index: 1000;
 }
-
-#popup-container {
+.popup-container {
+    display: none;
+    position: absolute; /* Changed to absolute for precise positioning */
+    background: #ffffff;
+    border-radius: 16px;
+    padding: 24px;
     max-width: 700px;
     width: 90%;
     max-height: 80vh;
     overflow-y: auto;
-    background: #fff;
-    border-radius: 16px;
-    padding: 24px;
-    display: none;
-    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
     border: 2px solid #667eea;
+    z-index: 1001;
 }
-
 
 .popup-close {
     position: absolute;
