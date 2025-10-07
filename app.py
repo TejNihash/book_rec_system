@@ -187,34 +187,35 @@ with gr.Blocks(css="""
 }
 
 /* OPTION 1: Viewport-centered popup - NO SCROLLING */
+.popup-overlay, .popup-container {
+    position: fixed !important;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) !important;
+    z-index: 9999;
+}
+
 .popup-overlay {
-    display: none;
-    position: fixed; /* KEY: Fixed to viewport */
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
+    width: 100vw;
+    height: 100vh;
     background: rgba(255, 255, 255, 0.95);
     backdrop-filter: blur(5px);
-    z-index: 1000;
-}
-.popup-container {
     display: none;
-    position: fixed; /* KEY: Fixed to viewport */
-    top: 50%; /* Center vertically in viewport */
-    left: 50%; /* Center horizontally in viewport */
-    transform: translate(-50%, -50%); /* Perfect centering */
-    background: #ffffff;
-    border-radius: 16px;
-    padding: 24px;
+}
+
+.popup-container {
     max-width: 700px;
     width: 90%;
     max-height: 80vh;
     overflow-y: auto;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    background: #fff;
+    border-radius: 16px;
+    padding: 24px;
+    display: none;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
     border: 2px solid #667eea;
-    z-index: 1001;
 }
+
 .popup-close {
     position: absolute;
     top: 12px;
@@ -385,28 +386,27 @@ with gr.Blocks(css="""
         <span class="popup-close" id="popup-close">&times;</span>
         <div class="popup-content" id="popup-content"></div>
     </div>
-
+    
     <script>
     const overlay = document.getElementById('popup-overlay');
     const container = document.getElementById('popup-container');
     const closeBtn = document.getElementById('popup-close');
     const content = document.getElementById('popup-content');
-
+    
     function escapeHtml(str) {
-        return str ? String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;') : "";
+        return str ? String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;') : "";
     }
-
-    function formatText(text) {
-        if (!text) return 'No description available.';
-        return text.replace(/\\n/g, '<br>');
-    }
-
+    
+    // Display popup
     document.addEventListener('click', function(e) {
         const card = e.target.closest('.book-card');
         if (!card) return;
-        
-        // NO SCROLL POSITION STORAGE NEEDED - we don't move the page!
-        
+    
         const title = card.dataset.title;
         const authors = card.dataset.authors;
         const genres = card.dataset.genres;
@@ -415,79 +415,47 @@ with gr.Blocks(css="""
         const rating = card.dataset.rating || '0';
         const year = card.dataset.year || 'N/A';
         const pages = card.dataset.pages || 'N/A';
-        
-        // Generate star rating
+    
         const numRating = parseFloat(rating);
         const fullStars = Math.floor(numRating);
         const hasHalfStar = numRating % 1 >= 0.5;
         let stars = '⭐'.repeat(fullStars);
         if (hasHalfStar) stars += '½';
         stars += '☆'.repeat(5 - fullStars - (hasHalfStar ? 1 : 0));
-        
+    
         content.innerHTML = `
             <div style="display: flex; gap: 20px; align-items: flex-start; margin-bottom: 20px;">
-                <img src="${img}" style="width: 180px; height: auto; border-radius: 8px; object-fit: cover; box-shadow: 0 4px 12px rgba(0,0,0,0.2);">
+                <img src="${img}" style="width: 180px; height: auto; border-radius: 8px; object-fit: cover;">
                 <div style="flex: 1; color: #222;">
-                    <h2 style="margin: 0 0 12px 0; color: #1a202c; border-bottom: 2px solid #667eea; padding-bottom: 8px;">${escapeHtml(title)}</h2>
-                    <p style="margin: 0 0 8px 0; font-size: 15px;"><strong>Author(s):</strong> <span style="color: #667eea;">${escapeHtml(authors)}</span></p>
-                    <p style="margin: 0 0 8px 0; font-size: 15px;"><strong>Genres:</strong> <span style="color: #764ba2;">${escapeHtml(genres)}</span></p>
-                    <p style="margin: 0 0 8px 0; font-size: 15px;"><strong>Rating:</strong> ${stars} <strong style="color: #667eea;">${parseFloat(rating).toFixed(1)}</strong></p>
+                    <h2 style="margin: 0 0 12px 0;">${escapeHtml(title)}</h2>
+                    <p><strong>Author(s):</strong> <span style="color: #667eea;">${escapeHtml(authors)}</span></p>
+                    <p><strong>Genres:</strong> <span style="color: #764ba2;">${escapeHtml(genres)}</span></p>
+                    <p><strong>Rating:</strong> ${stars} <strong>${parseFloat(rating).toFixed(1)}</strong></p>
                 </div>
             </div>
-            <div class="detail-stats">
-                <div class="detail-stat">
-                    <div class="detail-stat-value">${escapeHtml(year)}</div>
-                    <div class="detail-stat-label">PUBLICATION YEAR</div>
-                </div>
-                <div class="detail-stat">
-                    <div class="detail-stat-value">${escapeHtml(pages)}</div>
-                    <div class="detail-stat-label">PAGES</div>
-                </div>
-                <div class="detail-stat">
-                    <div class="detail-stat-value">${Math.ceil(parseInt(pages) / 250) || 'N/A'}</div>
-                    <div class="detail-stat-label">READING TIME (HOURS)</div>
-                </div>
-            </div>
-            <div style="margin-top: 15px;">
-                <h3 style="margin: 0 0 10px 0; color: #1a202c; font-size: 16px;">Description</h3>
-                <div class="description-scroll">
-                    ${formatText(escapeHtml(desc))}
-                </div>
-            </div>
+            <div class="description-scroll">${escapeHtml(desc).replace(/\\n/g, '<br>')}</div>
         `;
-        
-        // SIMPLE: Just show the popup - NO SCROLLING, NO POSITION CHANGES
+    
         overlay.style.display = 'block';
         container.style.display = 'block';
-        
-        // Prevent background scrolling for better focus
-        document.body.style.overflow = 'hidden';
+        document.body.style.overflow = 'hidden'; // prevent background scroll
     });
-
+    
+    // Close popup
     function closePopup() {
         overlay.style.display = 'none';
         container.style.display = 'none';
-        
-        // Restore scrolling
         document.body.style.overflow = 'auto';
-        
-        // NO SCROLL RESTORATION NEEDED - we never moved!
     }
-
+    
     closeBtn.addEventListener('click', closePopup);
     overlay.addEventListener('click', closePopup);
-    
-    document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape') {
-            closePopup();
-        }
-    });
-
-    // Prevent popup from closing when clicking inside it
-    container.addEventListener('click', function(e) {
-        e.stopPropagation();
-    });
+    document.addEventListener('keydown', e => { if(e.key==='Escape') closePopup(); });
+    container.addEventListener('click', e => e.stopPropagation()); // don't close when clicking inside
     </script>
     """)
+
+
+
 
 demo.launch()
