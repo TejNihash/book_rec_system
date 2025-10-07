@@ -871,6 +871,33 @@ with gr.Blocks(css="""
     container.addEventListener('click', function(e) {
         e.stopPropagation();
     });
+
+
+    // Add this debug function
+    function debugFavoriteComponents() {
+        const inputs = document.querySelectorAll('input');
+        const buttons = document.querySelectorAll('button');
+        
+        console.log('=== DEBUG FAVORITE COMPONENTS ===');
+        console.log('All inputs:', inputs);
+        console.log('All buttons:', buttons);
+        
+        inputs.forEach((input, i) => {
+            if (input.getAttribute('aria-label') === 'Favorite Book ID') {
+                console.log(`Found favorite input at index ${i}:`, input);
+            }
+        });
+        
+        buttons.forEach((button, i) => {
+            if (button.textContent.includes('Add Favorite')) {
+                console.log(`Found favorite button at index ${i}:`, button);
+            }
+        });
+    }
+    
+    // Call this to debug
+    // debugFavoriteComponents();
+
     </script>
     """)
 
