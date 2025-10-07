@@ -374,85 +374,84 @@ with gr.Blocks(css="""
         </div>
     </div>
 
+
+
+
+
     <script>
     const overlay = document.getElementById('detail-overlay');
     const box = document.getElementById('detail-box');
     const closeBtn = document.getElementById('detail-close');
-
-    // saved state
+    
+    // save scroll state
     let saved = {
         scrollableContainer: null,
         containerScrollTop: 0,
         windowScrollTop: 0,
         prevOverflow: ''
     };
-    // wheel/touch prevent handlers
-    const wheelHandler = (e) => { e.preventDefault(); };
-    const touchHandler = (e) => { e.preventDefault(); };
-
-    function escapeHtml(str){return str?String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;'):"";}
-
-    function formatText(text) { return text ? text.replace(/\\n/g,'<br>') : 'No description available.'; }
-
-    // detect scrollable ancestor inside which card sits (prefer .books-section)
-    function isScrollable(el) {
+    
+    // prevent scrolling events
+    const wheelHandler = e => e.preventDefault();
+    const touchHandler = e => e.preventDefault();
+    
+    function escapeHtml(str){
+        return str ? String(str)
+            .replace(/&/g,'&amp;')
+            .replace(/</g,'&lt;')
+            .replace(/>/g,'&gt;')
+            .replace(/"/g,'&quot;')
+            .replace(/'/g,'&#039;') : "";
+    }
+    function formatText(text){
+        return text ? text.replace(/\\n/g,'<br>') : 'No description available.';
+    }
+    
+    function isScrollable(el){
         if (!el || el === document.body) return false;
         const style = window.getComputedStyle(el);
         const overflowY = style.overflowY;
         return (overflowY === 'auto' || overflowY === 'scroll') && el.scrollHeight > el.clientHeight;
     }
-    function findScrollableParent(el) {
+    function findScrollableParent(el){
         let node = el.parentElement;
-        while (node) {
+        while (node){
             if (isScrollable(node)) return node;
             node = node.parentElement;
         }
-        // fallback to document scrolling element
         return document.scrollingElement || document.documentElement;
     }
-
-    function lockScrolling(container) {
-        // store previous overflow for restoration
-        if (container === document.scrollingElement || container === document.documentElement) {
-            // page-level
+    
+    function lockScrolling(container){
+        if (container === document.scrollingElement || container === document.documentElement){
             saved.windowScrollTop = window.pageYOffset || document.documentElement.scrollTop || 0;
             document.body.style.overflow = 'hidden';
-            // also prevent wheel/touch globally
-            window.addEventListener('wheel', wheelHandler, { passive: false });
-            window.addEventListener('touchmove', touchHandler, { passive: false });
         } else {
             saved.containerScrollTop = container.scrollTop;
             saved.prevOverflow = container.style.overflow || '';
             container.style.overflow = 'hidden';
-            // prevent wheel/touch so user can't accidentally scroll other things
-            window.addEventListener('wheel', wheelHandler, { passive: false });
-            window.addEventListener('touchmove', touchHandler, { passive: false });
         }
+        window.addEventListener('wheel', wheelHandler, { passive:false });
+        window.addEventListener('touchmove', touchHandler, { passive:false });
     }
-
-    function unlockScrolling(container) {
-        if (container === document.scrollingElement || container === document.documentElement) {
+    function unlockScrolling(container){
+        if (container === document.scrollingElement || container === document.documentElement){
             document.body.style.overflow = '';
             window.scrollTo(0, saved.windowScrollTop || 0);
-            window.removeEventListener('wheel', wheelHandler);
-            window.removeEventListener('touchmove', touchHandler);
         } else {
             container.style.overflow = saved.prevOverflow || '';
             container.scrollTop = saved.containerScrollTop || 0;
-            // also restore window scroll just in case
             window.scrollTo(0, saved.windowScrollTop || 0);
-            window.removeEventListener('wheel', wheelHandler);
-            window.removeEventListener('touchmove', touchHandler);
         }
-        // clear saved
-        saved = { scrollableContainer: null, containerScrollTop: 0, windowScrollTop: 0, prevOverflow: '' };
+        window.removeEventListener('wheel', wheelHandler);
+        window.removeEventListener('touchmove', touchHandler);
+        saved = { scrollableContainer:null, containerScrollTop:0, windowScrollTop:0, prevOverflow:'' };
     }
-
+    
     document.addEventListener('click', e => {
         const card = e.target.closest('.book-card');
-        if(!card) return;
-
-        // Find the scrollable parent container (if any)
+        if (!card) return;
+    
         const container = findScrollableParent(card) || (document.scrollingElement || document.documentElement);
         saved.scrollableContainer = container;
         saved.windowScrollTop = window.pageYOffset || document.documentElement.scrollTop || 0;
@@ -465,14 +464,14 @@ with gr.Blocks(css="""
         const rating = card.dataset.rating || '0';
         const year = card.dataset.year || 'N/A';
         const pages = card.dataset.pages || 'N/A';
-
+    
         const numRating = parseFloat(rating);
         const fullStars = Math.floor(numRating);
         const hasHalfStar = numRating % 1 >= 0.5;
         let stars = '⭐'.repeat(fullStars);
-        if(hasHalfStar) stars += '½';
+        if (hasHalfStar) stars += '½';
         stars += '☆'.repeat(5 - fullStars - (hasHalfStar ? 1 : 0));
-
+    
         document.getElementById('detail-content').innerHTML = `
             <div style="display:flex;gap:20px;align-items:flex-start;margin-bottom:20px;">
                 <img src="${img}" style="width:200px;height:auto;border-radius:8px;object-fit:cover;box-shadow:0 4px 12px rgba(0,0,0,0.2);">
@@ -483,20 +482,6 @@ with gr.Blocks(css="""
                     <p style="margin:0 0 8px 0;font-size:15px;"><strong>Rating:</strong> ${stars} <strong style="color:#667eea;">${parseFloat(rating).toFixed(1)}</strong></p>
                 </div>
             </div>
-            <div class="detail-stats">
-                <div class="detail-stat">
-                    <div class="detail-stat-value">${escapeHtml(year)}</div>
-                    <div class="detail-stat-label">PUBLICATION YEAR</div>
-                </div>
-                <div class="detail-stat">
-                    <div class="detail-stat-value">${escapeHtml(pages)}</div>
-                    <div class="detail-stat-label">PAGES</div>
-                </div>
-                <div class="detail-stat">
-                    <div class="detail-stat-value">${Math.ceil(parseInt(pages) / 250) || 'N/A'}</div>
-                    <div class="detail-stat-label">READING TIME (HOURS)</div>
-                </div>
-            </div>
             <div style="margin-top:15px;">
                 <h3 style="margin:0 0 10px 0;color:#1a202c;font-size:16px;">Description</h3>
                 <div class="description-scroll" style="background:#f8f9ff;padding:15px;border-radius:8px;border-left:4px solid #667eea;font-size:14px;line-height:1.6;color:#222;">
@@ -505,25 +490,33 @@ with gr.Blocks(css="""
             </div>
         `;
 
-        // show overlay and lock scroll only on the relevant container
+        // center modal relative to the current viewport
+        const viewportCenter = window.innerHeight / 2;
+        box.style.top = `${viewportCenter}px`;
+        box.style.left = '50%';
+        box.style.transform = 'translate(-50%, -50%)';
+    
         overlay.style.display = 'block';
         lockScrolling(container);
-
-        // focus modal without causing scroll (if supported)
-        try { box.focus({preventScroll: true}); } catch (err) { box.focus(); }
+        try { box.focus({ preventScroll:true }); } catch(err) { box.focus(); }
     });
-
-    function closePopup() {
+    
+    function closePopup(){
         overlay.style.display = 'none';
-        // unlock using saved container
+        box.style.top = '';
+        box.style.left = '';
+        box.style.transform = '';
         const container = saved.scrollableContainer || (document.scrollingElement || document.documentElement);
         unlockScrolling(container);
     }
-
+    
     closeBtn.addEventListener('click', closePopup);
-    overlay.addEventListener('click', e => { if(e.target === overlay) closePopup(); });
-    document.addEventListener('keydown', e => { if(e.key === 'Escape') closePopup(); });
+    overlay.addEventListener('click', e => { if (e.target === overlay) closePopup(); });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closePopup(); });
     </script>
+
+
+
     """)
 
 demo.launch()
