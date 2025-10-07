@@ -281,15 +281,7 @@ with gr.Blocks(css="""
     gr.Markdown("# 📚 Book Discovery Hub")
     gr.Markdown("### Explore our curated collection of amazing books")
 
-    # === POPULAR BOOKS SECTION ===
-    gr.Markdown("## 📈 Popular Books")
-    with gr.Column():
-        popular_books_container = gr.HTML(elem_classes="books-section")
-        
-        with gr.Row():
-            popular_load_more_btn = gr.Button("📚 Load More Popular Books", elem_classes="load-more-btn")
-
-    # === RANDOM BOOKS SECTION ===  
+    # === RANDOM BOOKS SECTION (TOP) ===  
     gr.Markdown("## 🎲 Random Books")
     with gr.Column():
         random_books_container = gr.HTML(elem_classes="books-section")
@@ -298,17 +290,25 @@ with gr.Blocks(css="""
             random_load_more_btn = gr.Button("📚 Load More Random Books", elem_classes="load-more-btn")
             shuffle_btn = gr.Button("🔀 Shuffle Books", elem_classes="load-more-btn")
 
+    # === POPULAR BOOKS SECTION (BOTTOM) ===
+    gr.Markdown("## 📈 Popular Books")
+    with gr.Column():
+        popular_books_container = gr.HTML(elem_classes="books-section")
+        
+        with gr.Row():
+            popular_load_more_btn = gr.Button("📚 Load More Popular Books", elem_classes="load-more-btn")
+
     # State for both sections
-    popular_books_state = gr.State(df.copy())  # Original order
-    popular_display_state = gr.State(pd.DataFrame())
-    popular_index_state = gr.State(0)
-    
     random_books_state = gr.State(df.sample(frac=1).reset_index(drop=True))  # Shuffled
     random_display_state = gr.State(pd.DataFrame())
     random_index_state = gr.State(0)
+    
+    popular_books_state = gr.State(df.copy())  # Original order
+    popular_display_state = gr.State(pd.DataFrame())
+    popular_index_state = gr.State(0)
 
     # ---------- Functions ----------
-    def load_more_popular(loaded_books, display_books, page_idx):
+    def load_more_random(loaded_books, display_books, page_idx):
         start = page_idx * BOOKS_PER_LOAD
         end = start + BOOKS_PER_LOAD
         new_books = loaded_books.iloc[start:end]
@@ -318,7 +318,7 @@ with gr.Blocks(css="""
         html = build_books_grid_html(combined)
         return combined, gr.update(value=html), gr.update(visible=True), page_idx + 1
 
-    def load_more_random(loaded_books, display_books, page_idx):
+    def load_more_popular(loaded_books, display_books, page_idx):
         start = page_idx * BOOKS_PER_LOAD
         end = start + BOOKS_PER_LOAD
         new_books = loaded_books.iloc[start:end]
@@ -334,14 +334,7 @@ with gr.Blocks(css="""
         html = build_books_grid_html(initial_books)
         return shuffled, initial_books, html, 1
 
-    # Event handlers for Popular Books
-    popular_load_more_btn.click(
-        load_more_popular,
-        [popular_books_state, popular_display_state, popular_index_state],
-        [popular_display_state, popular_books_container, popular_load_more_btn, popular_index_state]
-    )
-
-    # Event handlers for Random Books
+    # Event handlers for Random Books (top section)
     random_load_more_btn.click(
         load_more_random,
         [random_books_state, random_display_state, random_index_state],
@@ -354,22 +347,29 @@ with gr.Blocks(css="""
         [random_books_state, random_display_state, random_books_container, random_index_state]
     )
 
-    # Initialize both sections
-    def initial_load_popular(loaded_books):
-        initial_books = loaded_books.iloc[:BOOKS_PER_LOAD]
-        html = build_books_grid_html(initial_books)
-        return initial_books, html, 1
+    # Event handlers for Popular Books (bottom section)
+    popular_load_more_btn.click(
+        load_more_popular,
+        [popular_books_state, popular_display_state, popular_index_state],
+        [popular_display_state, popular_books_container, popular_load_more_btn, popular_index_state]
+    )
 
+    # Initialize both sections
     def initial_load_random(loaded_books):
         initial_books = loaded_books.iloc[:BOOKS_PER_LOAD]
         html = build_books_grid_html(initial_books)
         return initial_books, html, 1
 
-    # Set initial values
-    popular_display_state.value, popular_books_container.value, popular_index_state.value = initial_load_popular(popular_books_state.value)
-    random_display_state.value, random_books_container.value, random_index_state.value = initial_load_random(random_books_state.value)
+    def initial_load_popular(loaded_books):
+        initial_books = loaded_books.iloc[:BOOKS_PER_LOAD]
+        html = build_books_grid_html(initial_books)
+        return initial_books, html, 1
 
-    # ---------- Modal Popup with Full-Screen Takeover & Scroll Preservation ----------
+    # Set initial values
+    random_display_state.value, random_books_container.value, random_index_state.value = initial_load_random(random_books_state.value)
+    popular_display_state.value, popular_books_container.value, popular_index_state.value = initial_load_popular(popular_books_state.value)
+
+    # ---------- COMPLETELY HIJACKED Detail Popup - NO SCROLLING NEEDED ----------
     gr.HTML("""
     <div id="detail-overlay">
         <div id="detail-box">
@@ -377,37 +377,22 @@ with gr.Blocks(css="""
             <div id="detail-content"></div>
         </div>
     </div>
-    
     <script>
     const overlay = document.getElementById('detail-overlay');
     const box = document.getElementById('detail-box');
     const closeBtn = document.getElementById('detail-close');
-    let scrollPosition = 0; // Store scroll position before modal
-    
-    function escapeHtml(str){
-        return str?String(str).replace(/&/g,'&amp;')
-                             .replace(/</g,'&lt;')
-                             .replace(/>/g,'&gt;')
-                             .replace(/"/g,'&quot;')
-                             .replace(/'/g,'&#039;'):"";
+
+    function escapeHtml(str){return str?String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;'):"";}
+
+    function formatText(text) {
+        if (!text) return 'No description available.';
+        return text.replace(/\\n/g, '<br>');
     }
-    
-    function formatText(text){
-        return text ? text.replace(/\\n/g,'<br>') : 'No description available.';
-    }
-    
-    // Open modal
-    document.addEventListener('click', e => {
+
+    document.addEventListener('click', e=>{
         const card = e.target.closest('.book-card');
         if(!card) return;
-    
-        // Store scroll position before opening modal
-        scrollPosition = window.scrollY || document.documentElement.scrollTop;
-    
-        // Optional: scroll halfway up so modal shows nicely
-        const modalTopOffset = window.innerHeight/4;
-        window.scrollTo({top: scrollPosition - modalTopOffset, behavior: 'auto'});
-    
+        
         const title = card.dataset.title;
         const authors = card.dataset.authors;
         const genres = card.dataset.genres;
@@ -416,16 +401,15 @@ with gr.Blocks(css="""
         const rating = card.dataset.rating || '0';
         const year = card.dataset.year || 'N/A';
         const pages = card.dataset.pages || 'N/A';
-    
+        
         // Generate star rating
         const numRating = parseFloat(rating);
         const fullStars = Math.floor(numRating);
         const hasHalfStar = numRating % 1 >= 0.5;
         let stars = '⭐'.repeat(fullStars);
-        if(hasHalfStar) stars += '½';
+        if (hasHalfStar) stars += '½';
         stars += '☆'.repeat(5 - fullStars - (hasHalfStar ? 1 : 0));
-    
-        // Fill modal content
+        
         document.getElementById('detail-content').innerHTML = `
             <div style="display:flex;gap:20px;align-items:flex-start;margin-bottom:20px;">
                 <img src="${img}" style="width:200px;height:auto;border-radius:8px;object-fit:cover;box-shadow:0 4px 12px rgba(0,0,0,0.2);">
@@ -446,7 +430,7 @@ with gr.Blocks(css="""
                     <div class="detail-stat-label">PAGES</div>
                 </div>
                 <div class="detail-stat">
-                    <div class="detail-stat-value">${Math.ceil(parseInt(pages)/250) || 'N/A'}</div>
+                    <div class="detail-stat-value">${Math.ceil(parseInt(pages) / 250) || 'N/A'}</div>
                     <div class="detail-stat-label">READING TIME (HOURS)</div>
                 </div>
             </div>
@@ -457,24 +441,25 @@ with gr.Blocks(css="""
                 </div>
             </div>
         `;
-    
-        // Show modal and block background scroll
+        
+        // COMPLETE HIJACK - Show popup right where user is, NO SCROLLING
         overlay.style.display = 'block';
-        document.body.style.overflow = 'hidden';
+        // Don't touch body overflow - let user scroll naturally if they want
     });
 
-    // Close modal and restore scroll
-    function closePopup(){
+    function closePopup() {
         overlay.style.display = 'none';
-        document.body.style.overflow = 'auto';
-        window.scrollTo(0, scrollPosition); // Return to previous scroll position
+        // No scroll restoration needed since we never moved
     }
-    
+
     closeBtn.addEventListener('click', closePopup);
-    overlay.addEventListener('click', e => { if(e.target === overlay) closePopup(); });
-    document.addEventListener('keydown', e => { if(e.key === 'Escape') closePopup(); });
+    overlay.addEventListener('click', e=>{
+        if(e.target===overlay) closePopup();
+    });
+    document.addEventListener('keydown', e=>{
+        if(e.key==='Escape') closePopup();
+    });
     </script>
     """)
-
 
 demo.launch()
