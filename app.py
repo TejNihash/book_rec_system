@@ -1,7 +1,7 @@
 import ast
 import pandas as pd
-import random
 import gradio as gr
+import random
 
 # ---------- Load dataset ----------
 df = pd.read_csv("data_mini_books.csv")
@@ -10,6 +10,8 @@ if "id" not in df.columns:
 
 df["authors"] = df["authors"].apply(lambda x: ast.literal_eval(x) if isinstance(x, str) else x)
 df["genres"] = df["genres"].apply(lambda x: ast.literal_eval(x) if isinstance(x, str) else x)
+
+# Add additional book metrics
 df["rating"] = df.get("rating", [random.uniform(3.5, 4.8) for _ in range(len(df))])
 df["year"] = df.get("year", [random.randint(1990, 2023) for _ in range(len(df))])
 df["pages"] = df.get("pages", [random.randint(150, 600) for _ in range(len(df))])
@@ -22,7 +24,9 @@ def create_book_card_html(book):
     stars = "⭐" * int(rating) + "☆" * (5 - int(rating))
     if rating % 1 >= 0.5:
         stars = "⭐" * (int(rating) + 1) + "☆" * (4 - int(rating))
+    
     description = book.get('description', 'No description available.')
+    
     return f"""
     <div class='book-card' data-id='{book["id"]}' data-title="{book['title']}" 
          data-authors="{', '.join(book['authors'])}" data-genres="{', '.join(book['genres'])}" 
@@ -182,39 +186,42 @@ with gr.Blocks(css="""
     padding-left: 12px;
 }
 
-#detail-overlay { 
-    display:none; 
-    position:fixed; 
-    top:0; 
-    left:0; 
-    width:100%; 
-    height:100%; 
-    background:rgba(255,255,255,0.95);
-    z-index:1000; 
+/* OPTION 1: Viewport-centered popup - NO SCROLLING */
+.popup-overlay {
+    display: none;
+    position: fixed; /* KEY: Fixed to viewport */
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.95);
     backdrop-filter: blur(5px);
+    z-index: 1000;
 }
-#detail-box { 
-    position:fixed; 
-    top:50%; 
-    left:50%; 
-    transform: translate(-50%, -50%);
-    background:#ffffff;
-    border-radius:16px; 
-    padding:24px; 
-    max-width:700px; 
-    max-height:80vh;
+.popup-container {
+    display: none;
+    position: fixed; /* KEY: Fixed to viewport */
+    top: 50%; /* Center vertically in viewport */
+    left: 50%; /* Center horizontally in viewport */
+    transform: translate(-50%, -50%); /* Perfect centering */
+    background: #ffffff;
+    border-radius: 16px;
+    padding: 24px;
+    max-width: 700px;
+    width: 90%;
+    max-height: 80vh;
     overflow-y: auto;
-    box-shadow:0 12px 40px rgba(0,0,0,0.3); 
-    color:#222;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
     border: 2px solid #667eea;
+    z-index: 1001;
 }
-#detail-close { 
-    position:absolute; 
-    top:12px; 
-    right:16px; 
-    cursor:pointer; 
-    font-size:24px; 
-    font-weight:bold; 
+.popup-close {
+    position: absolute;
+    top: 12px;
+    right: 16px;
+    cursor: pointer;
+    font-size: 24px;
+    font-weight: bold;
     color: #222;
     background: #f0f0f0;
     border-radius: 50%;
@@ -223,12 +230,17 @@ with gr.Blocks(css="""
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+    transition: all 0.2s ease;
 }
-#detail-content { 
-    line-height:1.6; 
-    font-size:15px; 
-    color:#222; 
+.popup-close:hover {
+    background: #667eea;
+    color: white;
+}
+.popup-content {
+    line-height: 1.6;
+    font-size: 15px;
+    color: #222;
 }
 .detail-stats {
     display: grid;
@@ -257,6 +269,7 @@ with gr.Blocks(css="""
     max-height: 200px;
     overflow-y: auto;
     padding-right: 8px;
+    margin-top: 10px;
 }
 .description-scroll::-webkit-scrollbar {
     width: 6px;
@@ -365,97 +378,35 @@ with gr.Blocks(css="""
     random_display_state.value, random_books_container.value, random_index_state.value = initial_load_random(random_books_state.value)
     popular_display_state.value, popular_books_container.value, popular_index_state.value = initial_load_popular(popular_books_state.value)
 
-    # ---------- COMPLETELY HIJACKED Detail Popup - fixed, but preserves container scroll ----------
+    # ---------- OPTION 1 IMPLEMENTATION: Viewport-Centered Popup (NO SCROLLING) ----------
     gr.HTML("""
-    <div id="detail-overlay">
-        <div id="detail-box" role="dialog" aria-modal="true" tabindex="-1">
-            <span id="detail-close">&times;</span>
-            <div id="detail-content"></div>
-        </div>
+    <div class="popup-overlay" id="popup-overlay"></div>
+    <div class="popup-container" id="popup-container">
+        <span class="popup-close" id="popup-close">&times;</span>
+        <div class="popup-content" id="popup-content"></div>
     </div>
 
-
-
-
-
     <script>
-    const overlay = document.getElementById('detail-overlay');
-    const box = document.getElementById('detail-box');
-    const closeBtn = document.getElementById('detail-close');
-    
-    // save scroll state
-    let saved = {
-        scrollableContainer: null,
-        containerScrollTop: 0,
-        windowScrollTop: 0,
-        prevOverflow: ''
-    };
-    
-    // prevent scrolling events
-    const wheelHandler = e => e.preventDefault();
-    const touchHandler = e => e.preventDefault();
-    
-    function escapeHtml(str){
-        return str ? String(str)
-            .replace(/&/g,'&amp;')
-            .replace(/</g,'&lt;')
-            .replace(/>/g,'&gt;')
-            .replace(/"/g,'&quot;')
-            .replace(/'/g,'&#039;') : "";
+    const overlay = document.getElementById('popup-overlay');
+    const container = document.getElementById('popup-container');
+    const closeBtn = document.getElementById('popup-close');
+    const content = document.getElementById('popup-content');
+
+    function escapeHtml(str) {
+        return str ? String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;') : "";
     }
-    function formatText(text){
-        return text ? text.replace(/\\n/g,'<br>') : 'No description available.';
+
+    function formatText(text) {
+        if (!text) return 'No description available.';
+        return text.replace(/\\n/g, '<br>');
     }
-    
-    function isScrollable(el){
-        if (!el || el === document.body) return false;
-        const style = window.getComputedStyle(el);
-        const overflowY = style.overflowY;
-        return (overflowY === 'auto' || overflowY === 'scroll') && el.scrollHeight > el.clientHeight;
-    }
-    function findScrollableParent(el){
-        let node = el.parentElement;
-        while (node){
-            if (isScrollable(node)) return node;
-            node = node.parentElement;
-        }
-        return document.scrollingElement || document.documentElement;
-    }
-    
-    function lockScrolling(container){
-        if (container === document.scrollingElement || container === document.documentElement){
-            saved.windowScrollTop = window.pageYOffset || document.documentElement.scrollTop || 0;
-            document.body.style.overflow = 'hidden';
-        } else {
-            saved.containerScrollTop = container.scrollTop;
-            saved.prevOverflow = container.style.overflow || '';
-            container.style.overflow = 'hidden';
-        }
-        window.addEventListener('wheel', wheelHandler, { passive:false });
-        window.addEventListener('touchmove', touchHandler, { passive:false });
-    }
-    function unlockScrolling(container){
-        if (container === document.scrollingElement || container === document.documentElement){
-            document.body.style.overflow = '';
-            window.scrollTo(0, saved.windowScrollTop || 0);
-        } else {
-            container.style.overflow = saved.prevOverflow || '';
-            container.scrollTop = saved.containerScrollTop || 0;
-            window.scrollTo(0, saved.windowScrollTop || 0);
-        }
-        window.removeEventListener('wheel', wheelHandler);
-        window.removeEventListener('touchmove', touchHandler);
-        saved = { scrollableContainer:null, containerScrollTop:0, windowScrollTop:0, prevOverflow:'' };
-    }
-    
-    document.addEventListener('click', e => {
+
+    document.addEventListener('click', function(e) {
         const card = e.target.closest('.book-card');
         if (!card) return;
-    
-        const container = findScrollableParent(card) || (document.scrollingElement || document.documentElement);
-        saved.scrollableContainer = container;
-        saved.windowScrollTop = window.pageYOffset || document.documentElement.scrollTop || 0;
-
+        
+        // NO SCROLL POSITION STORAGE NEEDED - we don't move the page!
+        
         const title = card.dataset.title;
         const authors = card.dataset.authors;
         const genres = card.dataset.genres;
@@ -464,59 +415,79 @@ with gr.Blocks(css="""
         const rating = card.dataset.rating || '0';
         const year = card.dataset.year || 'N/A';
         const pages = card.dataset.pages || 'N/A';
-    
+        
+        // Generate star rating
         const numRating = parseFloat(rating);
         const fullStars = Math.floor(numRating);
         const hasHalfStar = numRating % 1 >= 0.5;
         let stars = '⭐'.repeat(fullStars);
         if (hasHalfStar) stars += '½';
         stars += '☆'.repeat(5 - fullStars - (hasHalfStar ? 1 : 0));
-    
-        document.getElementById('detail-content').innerHTML = `
-            <div style="display:flex;gap:20px;align-items:flex-start;margin-bottom:20px;">
-                <img src="${img}" style="width:200px;height:auto;border-radius:8px;object-fit:cover;box-shadow:0 4px 12px rgba(0,0,0,0.2);">
-                <div style="flex:1; color:#222;">
-                    <h2 style="margin:0 0 12px 0;color:#1a202c;border-bottom:2px solid #667eea;padding-bottom:8px;">${escapeHtml(title)}</h2>
-                    <p style="margin:0 0 8px 0;font-size:15px;"><strong>Author(s):</strong> <span style="color:#667eea;">${escapeHtml(authors)}</span></p>
-                    <p style="margin:0 0 8px 0;font-size:15px;"><strong>Genres:</strong> <span style="color:#764ba2;">${escapeHtml(genres)}</span></p>
-                    <p style="margin:0 0 8px 0;font-size:15px;"><strong>Rating:</strong> ${stars} <strong style="color:#667eea;">${parseFloat(rating).toFixed(1)}</strong></p>
+        
+        content.innerHTML = `
+            <div style="display: flex; gap: 20px; align-items: flex-start; margin-bottom: 20px;">
+                <img src="${img}" style="width: 180px; height: auto; border-radius: 8px; object-fit: cover; box-shadow: 0 4px 12px rgba(0,0,0,0.2);">
+                <div style="flex: 1; color: #222;">
+                    <h2 style="margin: 0 0 12px 0; color: #1a202c; border-bottom: 2px solid #667eea; padding-bottom: 8px;">${escapeHtml(title)}</h2>
+                    <p style="margin: 0 0 8px 0; font-size: 15px;"><strong>Author(s):</strong> <span style="color: #667eea;">${escapeHtml(authors)}</span></p>
+                    <p style="margin: 0 0 8px 0; font-size: 15px;"><strong>Genres:</strong> <span style="color: #764ba2;">${escapeHtml(genres)}</span></p>
+                    <p style="margin: 0 0 8px 0; font-size: 15px;"><strong>Rating:</strong> ${stars} <strong style="color: #667eea;">${parseFloat(rating).toFixed(1)}</strong></p>
                 </div>
             </div>
-            <div style="margin-top:15px;">
-                <h3 style="margin:0 0 10px 0;color:#1a202c;font-size:16px;">Description</h3>
-                <div class="description-scroll" style="background:#f8f9ff;padding:15px;border-radius:8px;border-left:4px solid #667eea;font-size:14px;line-height:1.6;color:#222;">
+            <div class="detail-stats">
+                <div class="detail-stat">
+                    <div class="detail-stat-value">${escapeHtml(year)}</div>
+                    <div class="detail-stat-label">PUBLICATION YEAR</div>
+                </div>
+                <div class="detail-stat">
+                    <div class="detail-stat-value">${escapeHtml(pages)}</div>
+                    <div class="detail-stat-label">PAGES</div>
+                </div>
+                <div class="detail-stat">
+                    <div class="detail-stat-value">${Math.ceil(parseInt(pages) / 250) || 'N/A'}</div>
+                    <div class="detail-stat-label">READING TIME (HOURS)</div>
+                </div>
+            </div>
+            <div style="margin-top: 15px;">
+                <h3 style="margin: 0 0 10px 0; color: #1a202c; font-size: 16px;">Description</h3>
+                <div class="description-scroll">
                     ${formatText(escapeHtml(desc))}
                 </div>
             </div>
         `;
-
-        // center modal relative to the current viewport
-        const viewportCenter = window.innerHeight / 2;
-        box.style.top = `${viewportCenter}px`;
-        box.style.left = '50%';
-        box.style.transform = 'translate(-50%, -50%)';
-    
+        
+        // SIMPLE: Just show the popup - NO SCROLLING, NO POSITION CHANGES
         overlay.style.display = 'block';
-        lockScrolling(container);
-        try { box.focus({ preventScroll:true }); } catch(err) { box.focus(); }
+        container.style.display = 'block';
+        
+        // Prevent background scrolling for better focus
+        document.body.style.overflow = 'hidden';
     });
-    
-    function closePopup(){
+
+    function closePopup() {
         overlay.style.display = 'none';
-        box.style.top = '';
-        box.style.left = '';
-        box.style.transform = '';
-        const container = saved.scrollableContainer || (document.scrollingElement || document.documentElement);
-        unlockScrolling(container);
+        container.style.display = 'none';
+        
+        // Restore scrolling
+        document.body.style.overflow = 'auto';
+        
+        // NO SCROLL RESTORATION NEEDED - we never moved!
     }
-    
+
     closeBtn.addEventListener('click', closePopup);
-    overlay.addEventListener('click', e => { if (e.target === overlay) closePopup(); });
-    document.addEventListener('keydown', e => { if (e.key === 'Escape') closePopup(); });
+    overlay.addEventListener('click', closePopup);
+    
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            closePopup();
+        }
+    });
+
+    // Prevent popup from closing when clicking inside it
+    container.addEventListener('click', function(e) {
+        e.stopPropagation();
+    });
     </script>
-
-
-
     """)
 
 demo.launch()
