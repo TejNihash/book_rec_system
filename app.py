@@ -551,4 +551,4 @@ with gr.Blocks(css="""
         outputs=[details_panel]
     )
 
-demo.launch()
+demo.launch(share = True)
