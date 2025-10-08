@@ -185,6 +185,13 @@ with gr.Blocks(css="""
     gr.Markdown("## 📈 Popular Books")
     popular_books_container = gr.HTML(elem_classes="books-section")
     popular_load_more_btn = gr.Button("📚 Load More Popular Books", elem_classes="load-more-btn")
+    
+    # ---------- Simple Favorites Trigger (using same pattern as other buttons) ----------
+    with gr.Row(visible=False) as hidden_row:
+        # Simple trigger that works like other buttons
+        add_fav_trigger = gr.Button("Add Favorite Simple")
+        add_fav_book_id = gr.Textbox(value="")
+
 
     # ---------- Favorites Section ----------
     with gr.Column():
@@ -326,150 +333,209 @@ with gr.Blocks(css="""
     favorites_state.value, favorites_container.value, favorites_index_state.value = pd.DataFrame(), favorites_container.value, 0
 
     # ---------- Popup with SIMPLE Favorite Integration ----------
-    gr.HTML("""
-    <div class="popup-overlay" id="popup-overlay"></div>
-    <div class="popup-container" id="popup-container">
-        <span class="popup-close" id="popup-close">&times;</span>
-        <div class="popup-content" id="popup-content"></div>
-    </div>
+# Replace the ENTIRE popup JavaScript section with this:
 
-    <script>
-    // Simple elements
-    const overlay = document.getElementById('popup-overlay');
-    const container = document.getElementById('popup-container');
-    const closeBtn = document.getElementById('popup-close');
-    const content = document.getElementById('popup-content');
+gr.HTML("""
+<div class="popup-overlay" id="popup-overlay"></div>
+<div class="popup-container" id="popup-container">
+    <span class="popup-close" id="popup-close">&times;</span>
+    <div class="popup-content" id="popup-content"></div>
+</div>
 
-    let currentBookId = null;
+<script>
+const overlay = document.getElementById('popup-overlay');
+const container = document.getElementById('popup-container');
+const closeBtn = document.getElementById('popup-close');
+const content = document.getElementById('popup-content');
 
-    // Simple function to check if book is favorited
-    function isBookFavorited(bookId) {
-        const cards = document.querySelectorAll('.book-card');
-        for (let card of cards) {
-            if (card.dataset.id === bookId) {
-                return card.querySelector('.book-title').textContent.includes('❤️');
-            }
-        }
-        return false;
-    }
+let currentBookId = null;
+let originalScrollPosition = 0;
 
-    // SIMPLE FUNCTION: Use the visible dropdown and button
-    function triggerFavoriteFromPopup(bookId) {
-        console.log('🎯 Using visible dropdown method for book:', bookId);
-        
-        // Find the dropdown and set its value
-        const dropdown = document.querySelector('select');
-        if (dropdown) {
-            // Find the option with this bookId
-            for (let option of dropdown.options) {
-                if (option.value === bookId) {
-                    dropdown.value = bookId;
-                    // Trigger change event
-                    dropdown.dispatchEvent(new Event('change', { bubbles: true }));
-                    
-                    // Wait a bit then click the visible favorite button
-                    setTimeout(() => {
-                        const favoriteBtn = document.querySelector('button:contains("❤️ Add to Favorites")');
-                        if (favoriteBtn) {
-                            console.log('🚀 Clicking visible favorite button');
-                            favoriteBtn.click();
-                        } else {
-                            console.log('❌ Could not find visible favorite button');
-                        }
-                    }, 200);
-                    break;
-                }
-            }
-        } else {
-            console.log('❌ Could not find dropdown');
+function escapeHtml(str) {
+    return str ? String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;') : "";
+}
+
+function formatText(text) {
+    if (!text) return 'No description available.';
+    return text.replace(/\\n/g, '<br>');
+}
+
+// SIMPLE FAVORITES FUNCTION - Uses same pattern as other working buttons
+function addToFavorites(bookId) {
+    console.log('🎯 SIMPLE: Adding to favorites:', bookId);
+    
+    // Find the simple trigger button and input
+    const buttons = Array.from(document.querySelectorAll('button'));
+    const inputs = Array.from(document.querySelectorAll('input[type="text"]'));
+    
+    let triggerBtn = null;
+    let bookIdInput = null;
+    
+    // Find the "Add Favorite Simple" button
+    for (let btn of buttons) {
+        if (btn.textContent.includes('Add Favorite Simple')) {
+            triggerBtn = btn;
+            break;
         }
     }
-
-    // Handle book card clicks
-    document.addEventListener('click', function(e) {
-        const card = e.target.closest('.book-card');
-        if (!card) return;
-        
-        currentBookId = card.dataset.id;
-        const isFavorite = isBookFavorited(currentBookId);
-        
-        const title = card.dataset.title;
-        const authors = card.dataset.authors;
-        const genres = card.dataset.genres;
-        const desc = card.dataset.desc;
-        const img = card.dataset.img;
-        const rating = card.dataset.rating;
-        const year = card.dataset.year;
-        const pages = card.dataset.pages;
-        
-        // Simple popup content
-        content.innerHTML = `
-            <div style="display: flex; gap: 20px; align-items: flex-start; margin-bottom: 20px;">
-                <img src="${img}" style="width: 180px; height: auto; border-radius: 8px; object-fit: cover;">
-                <div style="flex: 1;">
-                    <h2 style="margin: 0 0 12px 0; color: #fff; border-bottom: 2px solid #667eea; padding-bottom: 8px;">${title}</h2>
-                    <p style="margin: 0 0 8px 0;"><strong>Author(s):</strong> ${authors}</p>
-                    <p style="margin: 0 0 8px 0;"><strong>Genres:</strong> ${genres}</p>
-                    <p style="margin: 0 0 8px 0;"><strong>Rating:</strong> ${rating}</p>
-                </div>
-            </div>
-            
-            <div class="detail-stats">
-                <div class="detail-stat">
-                    <div class="detail-stat-value">${year}</div>
-                    <div class="detail-stat-label">YEAR</div>
-                </div>
-                <div class="detail-stat">
-                    <div class="detail-stat-value">${pages}</div>
-                    <div class="detail-stat-label">PAGES</div>
-                </div>
-                <div class="detail-stat">
-                    <div class="detail-stat-value">${Math.ceil(parseInt(pages) / 250) || 'N/A'}</div>
-                    <div class="detail-stat-label">HOURS TO READ</div>
-                </div>
-            </div>
-            
-            <div style="margin-top: 16px;">
-                <h3 style="margin: 0 0 10px 0; color: #fff;">Description</h3>
-                <div class="description-scroll">
-                    ${desc}
-                </div>
-            </div>
-            
-            <div class="favorite-action-section">
-                <button class="favorite-btn ${isFavorite ? 'remove' : ''}" onclick="triggerFavoriteFromPopup('${currentBookId}')">
-                    ${isFavorite ? '💔 Remove from Favorites' : '❤️ Add to Favorites'}
-                </button>
-                <p style="color: #888; font-size: 12px; margin-top: 8px;">This will use the dropdown above to add the book</p>
-            </div>
-        `;
-        
-        overlay.style.display = 'block';
-        container.style.display = 'block';
-        document.body.style.overflow = 'hidden';
-    });
-
-    // Simple close function
-    function closePopup() {
-        overlay.style.display = 'none';
-        container.style.display = 'none';
-        document.body.style.overflow = 'auto';
+    
+    // Find the book ID input (look for hidden inputs)
+    for (let input of inputs) {
+        const parent = input.closest('.row');
+        if (parent && parent.style.display === 'none') {
+            bookIdInput = input;
+            break;
+        }
     }
+    
+    if (triggerBtn && bookIdInput) {
+        console.log('✅ Found components:', {triggerBtn, bookIdInput});
+        
+        // SIMPLE: Just set the value and click the button
+        bookIdInput.value = bookId;
+        
+        // Small delay to ensure value is set
+        setTimeout(() => {
+            triggerBtn.click();
+            console.log('✅ Button clicked successfully');
+            
+            // Show feedback
+            showFeedback('❤️ Added to favorites!');
+            
+            // Close popup after a moment
+            setTimeout(() => {
+                closePopup();
+            }, 1000);
+            
+        }, 100);
+        
+    } else {
+        console.error('❌ Could not find components');
+        console.log('Available buttons:', buttons.map(b => b.textContent));
+        console.log('Available inputs:', inputs.map(i => i.value));
+        showFeedback('Error: Could not add to favorites', false);
+    }
+}
 
-    closeBtn.addEventListener('click', closePopup);
-    overlay.addEventListener('click', closePopup);
+function showFeedback(message, isSuccess = true) {
+    const existing = document.querySelector('.feedback-toast');
+    if (existing) existing.remove();
+    
+    const feedback = document.createElement('div');
+    feedback.className = 'feedback-toast';
+    feedback.style.background = isSuccess ? '#48bb78' : '#f56565';
+    feedback.textContent = message;
+    document.body.appendChild(feedback);
+    
+    setTimeout(() => {
+        if (document.body.contains(feedback)) {
+            document.body.removeChild(feedback);
+        }
+    }, 3000);
+}
 
-    document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape') closePopup();
-    });
+// Handle book card clicks (this part works fine)
+document.addEventListener('click', function(e) {
+    const card = e.target.closest('.book-card');
+    if (!card) return;
+    
+    originalScrollPosition = window.scrollY || document.documentElement.scrollTop;
+    currentBookId = card.dataset.id;
+    
+    const title = card.dataset.title;
+    const authors = card.dataset.authors;
+    const genres = card.dataset.genres;
+    const desc = card.dataset.desc;
+    const img = card.dataset.img;
+    const rating = card.dataset.rating || '0';
+    const year = card.dataset.year || 'N/A';
+    const pages = card.dataset.pages || 'N/A';
+    
+    const numRating = parseFloat(rating);
+    const fullStars = Math.floor(numRating);
+    const hasHalfStar = numRating % 1 >= 0.5;
+    let stars = '⭐'.repeat(fullStars);
+    if (hasHalfStar) stars += '½';
+    stars += '☆'.repeat(5 - fullStars - (hasHalfStar ? 1 : 0));
+    
+    // Check if book is in favorites by looking for heart in title
+    const isFavorite = card.querySelector('.book-title').textContent.includes('❤️');
+    const favoriteButtonText = isFavorite ? '💔 Remove from Favorites' : '❤️ Add to Favorites';
+    const favoriteButtonClass = isFavorite ? 'favorite-btn remove' : 'favorite-btn';
+    
+    content.innerHTML = `
+        <div style="display: flex; gap: 20px; align-items: flex-start; margin-bottom: 20px;">
+            <img src="${img}" style="width: 180px; height: auto; border-radius: 8px; object-fit: cover; box-shadow: 0 4px 12px rgba(0,0,0,0.5);">
+            <div style="flex: 1;">
+                <h2 style="margin: 0 0 12px 0; color: #fff; border-bottom: 2px solid #667eea; padding-bottom: 8px;">${escapeHtml(title)}</h2>
+                <p style="margin: 0 0 8px 0; font-size: 14px;"><strong style="color: #88c;">Author(s):</strong> <span style="color: #667eea;">${escapeHtml(authors)}</span></p>
+                <p style="margin: 0 0 8px 0; font-size: 14px;"><strong style="color: #88c;">Genres:</strong> <span style="color: #a78bfa;">${escapeHtml(genres)}</span></p>
+                <p style="margin: 0 0 8px 0; font-size: 14px;"><strong style="color: #88c;">Rating:</strong> ${stars} <strong style="color: #ffa500;">${parseFloat(rating).toFixed(1)}</strong></p>
+            </div>
+        </div>
+        
+        <div class="detail-stats">
+            <div class="detail-stat">
+                <div class="detail-stat-value">${escapeHtml(year)}</div>
+                <div class="detail-stat-label">PUBLICATION YEAR</div>
+            </div>
+            <div class="detail-stat">
+                <div class="detail-stat-value">${escapeHtml(pages)}</div>
+                <div class="detail-stat-label">PAGES</div>
+            </div>
+            <div class="detail-stat">
+                <div class="detail-stat-value">${Math.ceil(parseInt(pages) / 250) || 'N/A'}</div>
+                <div class="detail-stat-label">READING TIME (HOURS)</div>
+            </div>
+        </div>
+        
+        <div style="margin-top: 16px;">
+            <h3 style="margin: 0 0 10px 0; color: #fff; font-size: 16px; border-left: 3px solid #667eea; padding-left: 8px;">Description</h3>
+            <div class="description-scroll">
+                ${formatText(escapeHtml(desc))}
+            </div>
+        </div>
+        
+        <div class="favorite-action-section">
+            <button class="${favoriteButtonClass}" onclick="addToFavorites('${currentBookId}')">
+                ${favoriteButtonText}
+            </button>
+            <p style="margin: 8px 0 0 0; color: #888; font-size: 12px;">Click to ${isFavorite ? 'remove from' : 'add to'} your favorites collection</p>
+        </div>
+    `;
+    
+    overlay.style.display = 'block';
+    container.style.display = 'block';
+    document.body.style.overflow = 'hidden';
+});
 
-    container.addEventListener('click', function(e) {
-        e.stopPropagation();
-    });
+function closePopup() {
+    overlay.style.display = 'none';
+    container.style.display = 'none';
+    document.body.style.overflow = 'auto';
+    window.scrollTo(0, originalScrollPosition);
+}
 
-    // Make function available globally
-    window.triggerFavoriteFromPopup = triggerFavoriteFromPopup;
-    </script>
-    """)
+closeBtn.addEventListener('click', closePopup);
+overlay.addEventListener('click', closePopup);
+
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        closePopup();
+    }
+});
+
+container.addEventListener('click', function(e) {
+    e.stopPropagation();
+});
+
+// Make function globally available
+window.addToFavorites = addToFavorites;
+</script>
+""")
+
+
+
+        
 
 demo.launch()
