@@ -3,7 +3,7 @@ import pandas as pd
 import gradio as gr
 import random
 
-# Load dataset
+# ---------- Load dataset ----------
 df = pd.read_csv("data_mini_books.csv")
 if "id" not in df.columns:
     df["id"] = df.index.astype(str)
@@ -11,341 +11,260 @@ if "id" not in df.columns:
 df["authors"] = df["authors"].apply(lambda x: ast.literal_eval(x) if isinstance(x, str) else x)
 df["genres"] = df["genres"].apply(lambda x: ast.literal_eval(x) if isinstance(x, str) else x)
 
-# Fill missing data
-df["rating"] = df.get("rating", [random.uniform(3.5, 4.8) for _ in range(len(df))])
-df["year"] = df.get("year", [random.randint(1990, 2023) for _ in range(len(df))])
-df["pages"] = df.get("pages", [random.randint(150, 600) for _ in range(len(df))])
-
 BOOKS_PER_LOAD = 12
 favorites_list = []
 
-def create_book_card(book, show_fav_button=True):
-    """Create a book card with favorite button"""
-    rating = book.get("rating", 0)
-    stars = "⭐" * int(rating) + "☆" * (5 - int(rating))
-    if rating % 1 >= 0.5:
-        stars = "⭐" * (int(rating)+1) + "☆" * (4 - int(rating))
-    
-    is_favorite = any(fav['id'] == book["id"] for fav in favorites_list)
-    fav_text = "💔 Remove from Favorites" if is_favorite else "❤️ Add to Favorites"
-    
-    # Build HTML without problematic backslashes
-    card_content = f"""
-    <div class='book-card'>
-        <div class='book-card-content'>
-            <div class='book-image-section'>
-                <img src="{book['image_url']}" onerror="this.src='https://via.placeholder.com/120x180/444/fff?text=No+Image'">
-                <div class='book-year'>{book.get('year', 'N/A')}</div>
-            </div>
-            
-            <div class='book-info-section'>
-                <h3>{book['title']}</h3>
-                <p class='book-authors'><strong>By:</strong> {', '.join(book['authors'])}</p>
-                <p class='book-rating'><strong>Rating:</strong> {stars} ({rating:.1f})</p>
-                <p class='book-meta'><strong>Pages:</strong> {book.get('pages', 'N/A')}</p>
-                <p class='book-genres'><strong>Genres:</strong> {', '.join(book['genres'][:3])}</p>
-                
-                <div class='book-description'>
-                    <p>{book.get('description', 'No description available.')}</p>
-                </div>
-            </div>
+# ---------- Simple Helper Functions ----------
+def create_book_card_html(book):
+    return f"""
+    <div class='book-card' data-id='{book["id"]}' data-title="{book['title']}" 
+         data-authors="{', '.join(book['authors'])}" data-img="{book['image_url']}" 
+         data-desc="{book.get('description', 'No description')}">
+        <div class='book-image-container'>
+            <img src="{book['image_url']}" onerror="this.src='https://via.placeholder.com/150x220/444/fff?text=No+Image'">
         </div>
+        <div class='book-info'>
+            <div class='book-title'>{book['title']}</div>
+            <div class='book-authors'>by {', '.join(book['authors'])}</div>
+        </div>
+    </div>
     """
-    
-    if show_fav_button:
-        card_content += f"""
-        <div class='favorite-button-section'>
-            <button class='favorite-btn {"remove" if is_favorite else ""}' onclick='toggleFavorite("{book['id']}")'>{fav_text}</button>
-        </div>
-        """
-    
-    card_content += "</div>"
-    return card_content
 
+def build_books_grid_html(books_df, is_favorites_section=False):
+    if books_df.empty:
+        if is_favorites_section:
+            return "<div style='text-align: center; padding: 40px; color: #888;'>No favorite books yet. Click books below and use the favorite button!</div>"
+        return "<div style='text-align: center; padding: 40px; color: #888;'>No books found</div>"
+    
+    cards_html = []
+    for _, book in books_df.iterrows():
+        is_fav = is_favorites_section or any(fav['id'] == book['id'] for fav in favorites_list)
+        card = create_book_card_html(book)
+        if is_fav:
+            card = card.replace('book-card', 'book-card favorite')
+        cards_html.append(card)
+    return f"<div class='books-grid'>{''.join(cards_html)}</div>"
+
+# ---------- Favorites Functions ----------
 def toggle_favorite(book_id):
-    """Toggle favorite status"""
+    """Toggle favorite status for a book"""
     global favorites_list
     
-    # Find the book
-    book_match = df[df['id'] == book_id]
-    if book_match.empty:
-        return "", "❌ Book not found!"
-    
-    book_data = book_match.iloc[0].to_dict()
-    
-    # Toggle favorite
+    # Check if book is already in favorites
     if any(fav['id'] == book_id for fav in favorites_list):
+        # Remove from favorites
         favorites_list = [fav for fav in favorites_list if fav['id'] != book_id]
-        message = f"💔 Removed '{book_data['title']}' from favorites!"
-        print(f"❌ Removed '{book_data['title']}' from favorites")
+        message = "💔 Removed from favorites"
+        is_now_favorite = False
     else:
+        # Add to favorites
+        book_data = df[df['id'] == book_id].iloc[0].to_dict()
         favorites_list.append(book_data)
-        message = f"❤️ Added '{book_data['title']}' to favorites!"
-        print(f"✅ Added '{book_data['title']}' to favorites")
+        message = "❤️ Added to favorites"
+        is_now_favorite = True
     
-    # Update all displays
-    random_html = load_books_section(random_books, "")
-    popular_html = load_books_section(popular_books, "")
-    favorites_html = display_favorites()
+    # Update favorites display
+    favorites_df = pd.DataFrame(favorites_list)
+    favorites_html = build_books_grid_html(favorites_df, is_favorites_section=True)
     
-    return random_html, popular_html, favorites_html, message
-
-def display_favorites():
-    """Display favorites section"""
-    if not favorites_list:
-        return """
-        <div class='empty-state'>
-            No favorite books yet. Click the favorite button on any book to add it!
-        </div>
-        """
+    # Update favorites header
+    count_html = f"<h2>⭐ Favorites ({len(favorites_list)})</h2>"
     
-    favorites_html = "<div class='favorites-grid'>"
-    for book in favorites_list:
-        favorites_html += create_book_card(book, True)
-    favorites_html += "</div>"
+    # Update toggle button text
+    button_text = "💔 Remove from Favorites" if is_now_favorite else "❤️ Add to Favorites"
     
-    return favorites_html
+    return favorites_df, favorites_html, count_html, button_text, message
 
-def load_books_section(books_df, section_name):
-    """Load a section of books"""
-    if books_df.empty:
-        return f"<div class='empty-state'>No books found</div>"
-    
-    section_html = "<div class='books-grid'>"
-    for _, book in books_df.iterrows():
-        section_html += create_book_card(book.to_dict(), True)
-    section_html += "</div>"
-    return section_html
-
-def get_random_books():
-    """Get random books"""
-    return df.sample(n=min(8, len(df)))
-
-def get_popular_books():
-    """Get popular books (highest rated)"""
-    return df.nlargest(8, 'rating')
-
-# Initialize sections
-random_books = get_random_books()
-popular_books = get_popular_books()
-
+# ---------- Gradio UI ----------
 with gr.Blocks(css="""
-    .container { 
-        max-width: 1200px; 
-        margin: 0 auto; 
-        padding: 20px; 
-        background: #1a1a1a; 
-        color: white; 
-        font-family: Arial, sans-serif;
-    }
-    .section { 
-        background: #222; 
-        border-radius: 12px; 
-        padding: 25px; 
-        margin-bottom: 25px; 
-        border: 1px solid #444; 
-    }
-    .book-card {
-        background: #333;
-        border-radius: 12px;
-        padding: 20px;
-        margin-bottom: 15px;
-        border: 1px solid #555;
-        transition: all 0.3s ease;
-    }
-    .book-card:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 8px 25px rgba(0,0,0,0.5);
-        border-color: #667eea;
-    }
-    .book-card-content {
-        display: flex;
-        gap: 20px;
-        align-items: flex-start;
-    }
-    .book-image-section {
-        flex-shrink: 0;
-        text-align: center;
-    }
-    .book-image-section img {
-        width: 120px;
-        height: 180px;
-        object-fit: cover;
-        border-radius: 8px;
-        border: 1px solid #666;
-    }
-    .book-year {
-        background: #667eea;
-        color: white;
-        padding: 4px 8px;
-        border-radius: 10px;
-        font-size: 11px;
-        margin-top: 8px;
-        display: inline-block;
-    }
-    .book-info-section {
-        flex-grow: 1;
-    }
-    .book-info-section h3 {
-        margin: 0 0 12px 0;
-        color: #fff;
-        font-size: 18px;
-        border-bottom: 2px solid #667eea;
-        padding-bottom: 8px;
-    }
-    .book-authors {
-        margin: 0 0 8px 0;
-        color: #88c;
-        font-size: 14px;
-    }
-    .book-rating {
-        margin: 0 0 8px 0;
-        color: #ffa500;
-        font-size: 14px;
-    }
-    .book-meta {
-        margin: 0 0 8px 0;
-        color: #ccc;
-        font-size: 14px;
-    }
-    .book-genres {
-        margin: 0 0 12px 0;
-        color: #ccc;
-        font-size: 14px;
-    }
-    .book-description {
-        background: #222;
-        padding: 12px;
-        border-radius: 6px;
-        border: 1px solid #444;
-        max-height: 80px;
-        overflow-y: auto;
-    }
-    .book-description p {
-        margin: 0;
-        color: #eee;
-        font-size: 13px;
-        line-height: 1.4;
-    }
-    .favorite-button-section {
-        text-align: center;
-        margin-top: 15px;
-        padding-top: 15px;
-        border-top: 1px solid #555;
-    }
-    .favorite-btn {
-        background: linear-gradient(135deg, #ed8936 0%, #dd6b20 100%);
-        color: white;
-        border: none;
-        padding: 10px 20px;
-        border-radius: 20px;
-        font-weight: 600;
-        cursor: pointer;
-        transition: all 0.3s ease;
-        font-size: 14px;
-    }
-    .favorite-btn:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 16px rgba(237,137,54,0.4);
-    }
-    .favorite-btn.remove {
-        background: linear-gradient(135deg, #f56565 0%, #e53e3e 100%);
-    }
-    .empty-state {
-        text-align: center;
-        padding: 40px;
-        color: #888;
-        font-size: 16px;
-        background: #2a2a2a;
-        border-radius: 8px;
-        border: 1px solid #555;
-    }
-    .books-grid, .favorites-grid {
-        display: flex;
-        flex-direction: column;
-        gap: 15px;
-    }
-    h1, h2 {
-        color: #fff;
-        margin-bottom: 20px;
-    }
-    .feedback-message {
-        background: #48bb78;
-        color: white;
-        padding: 12px 20px;
-        border-radius: 8px;
-        margin: 10px 0;
-        text-align: center;
-        font-weight: 600;
-    }
+.books-section { border:1px solid #555; border-radius:12px; padding:16px; height:500px; overflow-y:auto; margin-bottom:20px; background:#222; }
+.books-grid { display:grid; grid-template-columns:repeat(6,1fr); gap:16px; }
+.book-card { background:#333; border-radius:12px; padding:10px; cursor:pointer; text-align:left; border:1px solid #555; height:100%; display:flex; flex-direction:column; color:#eee; }
+.book-card:hover { border-color:#667eea; }
+.book-card.favorite { border:2px solid #ed8936; }
+.book-image-container { margin-bottom:10px; }
+.book-card img { width:100%; height:180px; object-fit:cover; border-radius:8px; border:1px solid #666; }
+.book-info { flex-grow:1; }
+.book-title { font-size:13px; font-weight:700; color:#fff; margin-bottom:2px; }
+.book-authors { font-size:11px; color:#88c; }
+
+.favorite-btn { background:#ed8936; color:white; border:none; padding:12px 24px; border-radius:20px; font-weight:600; cursor:pointer; margin:10px 0; font-size:14px; width:100%; }
+.favorite-btn:hover { background:#dd6b20; }
+.favorite-btn.remove { background:#f56565; }
+
+/* Popup Styles */
+.popup-overlay { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:99998; }
+.popup-container { display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:#111; border-radius:16px; padding:24px; max-width:600px; width:90%; max-height:80vh; overflow-y:auto; border:2px solid #667eea; z-index:99999; color:#eee; }
+.popup-close { position:absolute; top:12px; right:16px; cursor:pointer; font-size:24px; font-weight:bold; color:#fff; }
+.popup-content { line-height:1.6; }
 """) as demo:
 
-    with gr.Column(elem_classes="container"):
-        gr.Markdown("# 📚 Book Discovery Hub")
-        gr.Markdown("### Explore and manage your favorite books")
-        
-        # Feedback message
-        feedback = gr.HTML("")
-        
-        # Random Books Section
-        with gr.Column(elem_classes="section"):
-            gr.Markdown("## 🎲 Random Books")
-            random_books_display = gr.HTML(load_books_section(random_books, ""))
-            with gr.Row():
-                shuffle_btn = gr.Button("🔄 Shuffle Random Books", variant="primary")
-        
-        # Popular Books Section  
-        with gr.Column(elem_classes="section"):
-            gr.Markdown("## 📈 Popular Books")
-            popular_books_display = gr.HTML(load_books_section(popular_books, ""))
-            with gr.Row():
-                refresh_popular_btn = gr.Button("🔄 Refresh Popular Books", variant="primary")
-        
-        # Favorites Section
-        with gr.Column(elem_classes="section"):
-            gr.Markdown("## ⭐ Your Favorites")
-            favorites_display = gr.HTML(display_favorites())
+    gr.Markdown("# 📚 Book Discovery")
     
-    # Event handlers for shuffle/refresh
-    def shuffle_random():
-        global random_books
-        random_books = get_random_books()
-        html = load_books_section(random_books, "")
-        return html, "🔄 Shuffled random books!"
+    # Current book info
+    current_book_info = gr.HTML("<div style='color: #888; padding: 10px; text-align: center;'>Click a book to see details</div>")
     
-    def refresh_popular():
-        global popular_books
-        popular_books = get_popular_books()
-        html = load_books_section(popular_books, "")
-        return html, "🔄 Refreshed popular books!"
+    # Favorite toggle button (initially hidden)
+    favorite_toggle_btn = gr.Button("❤️ Add to Favorites", elem_classes="favorite-btn", visible=False)
     
-    # Create individual favorite toggle functions for each book
-    favorite_functions = {}
-    for _, book in df.iterrows():
-        def create_favorite_handler(book_id):
-            def handler():
-                return toggle_favorite(book_id)
-            return handler
+    # Feedback
+    feedback = gr.HTML("")
+    
+    # ---------- Books Sections ----------
+    gr.Markdown("## 📚 All Books")
+    books_container = gr.HTML(elem_classes="books-section")
+    
+    gr.Markdown("## ⭐ Favorites")
+    favorites_header = gr.HTML("<h2>⭐ Favorites (0)</h2>")
+    favorites_container = gr.HTML(elem_classes="books-section", value="<div style='text-align: center; padding: 40px; color: #888;'>No favorite books yet</div>")
+
+    # ---------- States ----------
+    favorites_state = gr.State(pd.DataFrame())
+    current_book_state = gr.State(None)
+
+    # ---------- Functions ----------
+    def handle_book_click(book_data):
+        """When a book is clicked, show it and enable the favorite button"""
+        book_id = book_data["id"]
+        book_title = book_data["title"]
+        book_authors = ", ".join(book_data["authors"])
         
-        favorite_functions[book['id']] = create_favorite_handler(book['id'])
-    
-    # Set up event handlers
-    shuffle_btn.click(
-        lambda: (shuffle_random()[0], shuffle_random()[1]),
-        outputs=[random_books_display, feedback]
+        # Check if book is favorited
+        is_favorited = any(fav['id'] == book_id for fav in favorites_list)
+        
+        # Update book info display
+        book_info_html = f"""
+        <div style='color: #fff; padding: 10px; text-align: center; background: #333; border-radius: 8px;'>
+            <strong>{book_title}</strong><br>
+            <small style='color: #88c;'>by {book_authors}</small>
+        </div>
+        """
+        
+        # Update toggle button text and make it visible
+        button_text = "💔 Remove from Favorites" if is_favorited else "❤️ Add to Favorites"
+        
+        return book_info_html, gr.update(value=button_text, visible=True), book_data
+
+    def handle_favorite_toggle(current_book):
+        """Handle the favorite toggle button click"""
+        if current_book is None:
+            return favorites_state.value, favorites_container.value, favorites_header.value, favorite_toggle_btn.value, "Please select a book first"
+        
+        book_id = current_book["id"]
+        favorites_df, favorites_html, header, button_text, message = toggle_favorite(book_id)
+        
+        # Create feedback
+        feedback_html = f"""
+        <div style='background:#48bb78; color:white; padding:10px; border-radius:5px; text-align:center; margin:10px 0;'>
+            {message}
+        </div>
+        """
+        
+        return favorites_df, favorites_html, header, gr.update(value=button_text), feedback_html
+
+    # ---------- Event Handlers ----------
+    # Favorite toggle button
+    favorite_toggle_btn.click(
+        handle_favorite_toggle,
+        inputs=[current_book_state],
+        outputs=[favorites_state, favorites_container, favorites_header, favorite_toggle_btn, feedback]
     )
-    
-    refresh_popular_btn.click(
-        lambda: (refresh_popular()[0], refresh_popular()[1]),
-        outputs=[popular_books_display, feedback]
-    )
-    
-    # Create hidden buttons for each book's favorite toggle
-    for book_id in df['id'].values:
-        btn = gr.Button(f"Toggle {book_id}", visible=False)
-        btn.click(
-            favorite_functions[book_id],
-            outputs=[random_books_display, popular_books_display, favorites_display, feedback]
-        )
+
+    # ---------- Initial Load ----------
+    def initial_load():
+        initial_books = df.iloc[:BOOKS_PER_LOAD]
+        html = build_books_grid_html(initial_books)
+        return html
+
+    # Initialize
+    books_container.value = initial_load()
+
+    # ---------- Simple Popup with Favorite Integration ----------
+    gr.HTML("""
+    <div class="popup-overlay" id="popup-overlay"></div>
+    <div class="popup-container" id="popup-container">
+        <span class="popup-close" id="popup-close">&times;</span>
+        <div class="popup-content" id="popup-content"></div>
+    </div>
+
+    <script>
+    const overlay = document.getElementById('popup-overlay');
+    const container = document.getElementById('popup-container');
+    const closeBtn = document.getElementById('popup-close');
+    const content = document.getElementById('popup-content');
+
+    // Function to update the current book info and favorite button
+    function updateCurrentBook(bookData) {
+        // This function would ideally update the Gradio components
+        // For now, we'll just show the popup and let user use the visible favorite button
+        console.log('Book selected:', bookData.title);
+        
+        // We'll assume the favorite button above will work for this book
+        // The user needs to click the "Add to Favorites" button that's always visible
+    }
+
+    // Handle book card clicks
+    document.addEventListener('click', function(e) {
+        const card = e.target.closest('.book-card');
+        if (!card) return;
+        
+        const bookData = {
+            id: card.dataset.id,
+            title: card.dataset.title,
+            authors: card.dataset.authors,
+            desc: card.dataset.desc,
+            img: card.dataset.img
+        };
+        
+        // Simple popup content
+        content.innerHTML = `
+            <div style="display: flex; gap: 20px; align-items: flex-start; margin-bottom: 20px;">
+                <img src="${bookData.img}" style="width: 150px; height: auto; border-radius: 8px; object-fit: cover;">
+                <div style="flex: 1;">
+                    <h2 style="margin: 0 0 12px 0; color: #fff;">${bookData.title}</h2>
+                    <p style="margin: 0 0 8px 0;"><strong>Author(s):</strong> ${bookData.authors}</p>
+                </div>
+            </div>
+            
+            <div style="margin-top: 16px;">
+                <h3 style="margin: 0 0 10px 0; color: #fff;">Description</h3>
+                <div style="max-height: 200px; overflow-y: auto; padding: 10px; background: #222; border-radius: 6px;">
+                    ${bookData.desc}
+                </div>
+            </div>
+            
+            <div style="margin-top: 20px; padding-top: 15px; border-top: 2px solid #ed8936; text-align: center;">
+                <p style="color: #888; font-size: 12px; margin-bottom: 10px;">
+                    Use the "Add to Favorites" button above to toggle this book
+                </p>
+            </div>
+        `;
+        
+        overlay.style.display = 'block';
+        container.style.display = 'block';
+        document.body.style.overflow = 'hidden';
+        
+        // Update current book for the favorite button
+        updateCurrentBook(bookData);
+    });
+
+    function closePopup() {
+        overlay.style.display = 'none';
+        container.style.display = 'none';
+        document.body.style.overflow = 'auto';
+    }
+
+    closeBtn.addEventListener('click', closePopup);
+    overlay.addEventListener('click', closePopup);
+
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') closePopup();
+    });
+
+    container.addEventListener('click', function(e) {
+        e.stopPropagation();
+    });
+    </script>
+    """)
 
 demo.launch()
