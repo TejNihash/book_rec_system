@@ -123,36 +123,7 @@ def update_favorites_display():
     return favorites_df, html, gr.update(visible=load_more_visible), count_html
 
 
-# Replace the favorite action handler with this simple version:
 
-# Simple favorite function
-def handle_simple_favorite(book_id):
-    """Simple function to handle favorites"""
-    global favorites_list
-    
-    if book_id:
-        # Find the book
-        book_match = df[df['id'] == book_id]
-        if not book_match.empty:
-            book_data = book_match.iloc[0].to_dict()
-            
-            # Add to favorites if not already there
-            if not any(fav['id'] == book_id for fav in favorites_list):
-                favorites_list.append(book_data)
-                print(f"✅ SIMPLE: Added '{book_data['title']}' to favorites")
-                
-                # Update display
-                favorites_df, html, load_more_visible, header = update_favorites_display()
-                return favorites_df, html, load_more_visible, header, "❤️ Added to favorites!"
-    
-    return favorites_state.value, favorites_container.value, favorites_load_more_btn.visible, favorites_header.value, "⚠️ Could not add to favorites"
-
-# Connect the simple trigger
-add_fav_trigger.click(
-    handle_simple_favorite,
-    inputs=[add_fav_book_id],
-    outputs=[favorites_state, favorites_container, favorites_load_more_btn, favorites_header, feedback]
-)
 
 # ---------- Gradio UI ----------
 with gr.Blocks(css="""
@@ -302,24 +273,36 @@ with gr.Blocks(css="""
         return shuffled, initial_books, html, 1
 
     # SIMPLE FAVORITE FUNCTION - This WILL work!
-    def handle_favorite_click(book_id):
-        """Super simple function - just toggle the favorite"""
-        print(f"🎯 Handling favorite for book: {book_id}")
+# Replace the favorite action handler with this simple version:
+
+# Simple favorite function
+    def handle_simple_favorite(book_id):
+        """Simple function to handle favorites"""
+        global favorites_list
         
-        # Toggle favorite
-        success, message = toggle_favorite(book_id)
+        if book_id:
+            # Find the book
+            book_match = df[df['id'] == book_id]
+            if not book_match.empty:
+                book_data = book_match.iloc[0].to_dict()
+                
+                # Add to favorites if not already there
+                if not any(fav['id'] == book_id for fav in favorites_list):
+                    favorites_list.append(book_data)
+                    print(f"✅ SIMPLE: Added '{book_data['title']}' to favorites")
+                    
+                    # Update display
+                    favorites_df, html, load_more_visible, header = update_favorites_display()
+                    return favorites_df, html, load_more_visible, header, "❤️ Added to favorites!"
         
-        # Update display
-        favorites_df, html, load_more_visible, header = update_favorites_display()
-        
-        # Create feedback
-        feedback_html = f"""
-        <div class="feedback-toast" style="background: {'#48bb78' if success else '#f56565'}">
-            {message}
-        </div>
-        """
-        
-        return favorites_df, html, load_more_visible, header, feedback_html
+        return favorites_state.value, favorites_container.value, favorites_load_more_btn.visible, favorites_header.value, "⚠️ Could not add to favorites"
+    
+    # Connect the simple trigger
+    add_fav_trigger.click(
+        handle_simple_favorite,
+        inputs=[add_fav_book_id],
+        outputs=[favorites_state, favorites_container, favorites_load_more_btn, favorites_header, feedback]
+    )
 
     # ---------- Event Handlers ----------
     random_load_more_btn.click(
