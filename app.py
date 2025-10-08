@@ -3,7 +3,7 @@ import pandas as pd
 import gradio as gr
 import random
 
-# ---------- Load dataset ----------
+# Load and prepare data
 df = pd.read_csv("data_mini_books.csv")
 if "id" not in df.columns:
     df["id"] = df.index.astype(str)
@@ -11,383 +11,544 @@ if "id" not in df.columns:
 df["authors"] = df["authors"].apply(lambda x: ast.literal_eval(x) if isinstance(x, str) else x)
 df["genres"] = df["genres"].apply(lambda x: ast.literal_eval(x) if isinstance(x, str) else x)
 
-BOOKS_PER_LOAD = 12
-favorites_list = []
+# Fill missing data
+df["rating"] = df.get("rating", [round(random.uniform(3.5, 4.8), 1) for _ in range(len(df))])
+df["year"] = df.get("year", [random.randint(1990, 2023) for _ in range(len(df))])
+df["pages"] = df.get("pages", [random.randint(150, 600) for _ in range(len(df))])
+df["description"] = df.get("description", ["No description available." for _ in range(len(df))])
 
-# ---------- Simple Helper Functions ----------
-def create_book_card(book, is_favorite=False):
-    """Create a book card with heart toggle"""
+# Global state
+favorites = []
+current_book_details = None
+
+def create_book_card(book, index):
+    """Create a book card with heart toggle button"""
+    is_favorite = any(fav['id'] == book["id"] for fav in favorites)
     heart_icon = "❤️" if is_favorite else "🤍"
-    return f"""
-    <div class='book-card' data-id='{book["id"]}'>
-        <div class='book-header'>
-            <div class='book-title'>{book['title']}</div>
-            <div class='heart-toggle' onclick='toggleFavorite("{book["id"]}")'>{heart_icon}</div>
-        </div>
-        <div class='book-image-container'>
-            <img src='{book["image_url"]}' onerror="this.src='https://via.placeholder.com/150x220/444/fff?text=No+Image'">
-        </div>
-        <div class='book-authors'>by {', '.join(book['authors'])}</div>
-        <div class='book-genres'>{', '.join(book['genres'][:2])}</div>
-    </div>
-    """
-
-def build_books_grid(books_df):
-    """Build the main books grid"""
-    cards_html = []
-    for _, book in books_df.iterrows():
-        is_fav = any(fav['id'] == book['id'] for fav in favorites_list)
-        cards_html.append(create_book_card(book, is_fav))
-    return f"<div class='books-grid'>{''.join(cards_html)}</div>"
-
-def build_favorites_grid():
-    """Build the favorites grid"""
-    if not favorites_list:
-        return "<div class='no-favorites'>No favorites yet. Click the 🤍 icon to add books!</div>"
+    heart_tooltip = "Remove from favorites" if is_favorite else "Add to favorites"
     
-    cards_html = []
-    for book in favorites_list:
-        cards_html.append(create_book_card(book, True))
-    return f"<div class='books-grid'>{''.join(cards_html)}</div>"
-
-# ---------- Favorites Functions ----------
-def toggle_favorite(book_id):
-    """Toggle favorite status for a book"""
-    global favorites_list
+    # Generate star rating
+    rating = book.get("rating", 0)
+    full_stars = int(rating)
+    half_star = rating % 1 >= 0.5
+    stars = "⭐" * full_stars + ("⭐" if half_star else "") + "☆" * (5 - full_stars - (1 if half_star else 0))
     
-    # Check if book is already in favorites
-    if any(fav['id'] == book_id for fav in favorites_list):
-        # Remove from favorites
-        favorites_list = [fav for fav in favorites_list if fav['id'] != book_id]
-        message = "💔 Removed from favorites"
-        action = "removed"
-    else:
-        # Add to favorites
-        book_data = df[df['id'] == book_id].iloc[0].to_dict()
-        favorites_list.append(book_data)
-        message = "❤️ Added to favorites"
-        action = "added"
-    
-    # Update both grids
-    main_grid = build_books_grid(df.iloc[:BOOKS_PER_LOAD])
-    fav_grid = build_favorites_grid()
-    count = len(favorites_list)
-    
-    return main_grid, fav_grid, f"⭐ Favorites ({count})", message
-
-def get_book_details(book_id):
-    """Get detailed information for a book"""
-    book = df[df['id'] == book_id].iloc[0]
-    return f"""
-    <div class='book-details'>
-        <img src='{book['image_url']}' class='detail-image'>
-        <h2>{book['title']}</h2>
-        <p><strong>Authors:</strong> {', '.join(book['authors'])}</p>
-        <p><strong>Genres:</strong> {', '.join(book['genres'])}</p>
-        <p><strong>Description:</strong></p>
-        <div class='description'>{book.get('description', 'No description available.')}</div>
-        <div class='favorite-section'>
-            <button class='detail-favorite-btn' onclick='toggleFavorite("{book_id}")'>
-                {'💔 Remove from Favorites' if any(fav['id'] == book_id for fav in favorites_list) else '❤️ Add to Favorites'}
+    card_html = f"""
+    <div class="book-card" data-id="{book['id']}">
+        <div class="card-image">
+            <img src="{book['image_url']}" alt="{book['title']}" 
+                 onerror="this.src='https://via.placeholder.com/120x180/444/fff?text=No+Image'">
+            <div class="card-badge">{book.get('year', 'N/A')}</div>
+            <button class="heart-btn" title="{heart_tooltip}" onclick="toggleFavorite('{book['id']}')">
+                {heart_icon}
             </button>
         </div>
+        <div class="card-content">
+            <h4 class="book-title" title="{book['title']}">{book['title']}</h4>
+            <p class="book-authors">{', '.join(book['authors'][:2])}</p>
+            <div class="book-rating">
+                {stars} <span class="rating-text">({rating:.1f})</span>
+            </div>
+            <p class="book-genres">{', '.join(book['genres'][:2])}</p>
+        </div>
     </div>
     """
+    return card_html
 
-# ---------- Gradio UI ----------
+def toggle_favorite(book_id):
+    """Toggle favorite status for a book"""
+    global favorites
+    
+    book = df[df['id'] == book_id].iloc[0].to_dict() if not df[df['id'] == book_id].empty else None
+    if not book:
+        return gr.update(), gr.update(), "Book not found!"
+    
+    # Toggle favorite
+    if any(fav['id'] == book_id for fav in favorites):
+        favorites = [fav for fav in favorites if fav['id'] != book_id]
+        message = f"💔 Removed '{book['title']}' from favorites"
+    else:
+        favorites.append(book)
+        message = f"❤️ Added '{book['title']}' to favorites"
+    
+    # Update displays
+    books_html = create_books_grid()
+    favorites_html = create_favorites_section()
+    
+    return books_html, favorites_html, message
+
+def show_book_details(book_id):
+    """Show book details in the side panel"""
+    global current_book_details
+    
+    book = df[df['id'] == book_id].iloc[0].to_dict() if not df[df['id'] == book_id].empty else None
+    if not book:
+        return gr.update(visible=False), "", "primary", "❤️ Add to Favorites"
+    
+    current_book_details = book
+    
+    # Generate details HTML
+    rating = book.get("rating", 0)
+    full_stars = int(rating)
+    half_star = rating % 1 >= 0.5
+    stars = "⭐" * full_stars + ("⭐" if half_star else "") + "☆" * (5 - full_stars - (1 if half_star else 0))
+    
+    is_favorite = any(fav['id'] == book_id for fav in favorites)
+    fav_text = "💔 Remove from Favorites" if is_favorite else "❤️ Add to Favorites"
+    fav_variant = "secondary" if is_favorite else "primary"
+    
+    details_html = f"""
+    <div class="details-content">
+        <div class="details-header">
+            <img src="{book['image_url']}" alt="{book['title']}" 
+                 onerror="this.src='https://via.placeholder.com/200x300/444/fff?text=No+Image'">
+            <div class="header-info">
+                <h2>{book['title']}</h2>
+                <p class="authors">{', '.join(book['authors'])}</p>
+                <div class="rating-large">
+                    {stars} <span>({rating:.1f})</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="details-grid">
+            <div class="detail-item">
+                <span class="label">Year:</span>
+                <span class="value">{book.get('year', 'N/A')}</span>
+            </div>
+            <div class="detail-item">
+                <span class="label">Pages:</span>
+                <span class="value">{book.get('pages', 'N/A')}</span>
+            </div>
+            <div class="detail-item">
+                <span class="label">Genres:</span>
+                <span class="value">{', '.join(book['genres'])}</span>
+            </div>
+        </div>
+        
+        <div class="description-section">
+            <h3>Description</h3>
+            <p>{book.get('description', 'No description available.')}</p>
+        </div>
+    </div>
+    """
+    
+    return gr.update(visible=True), details_html, fav_variant, fav_text
+
+def create_books_grid():
+    """Create the main books grid"""
+    books_html = '<div class="books-grid">'
+    for i, (_, book) in enumerate(df.iterrows()):
+        books_html += create_book_card(book, i)
+    books_html += '</div>'
+    return books_html
+
+def create_favorites_section():
+    """Create the favorites section"""
+    if not favorites:
+        return """
+        <div class="empty-favorites">
+            <div class="empty-icon">⭐</div>
+            <h3>No favorites yet</h3>
+            <p>Click the heart icon on any book to add it to your favorites!</p>
+        </div>
+        """
+    
+    favorites_html = '<div class="favorites-grid">'
+    for book in favorites:
+        is_favorite = True  # All books in favorites are... favorites!
+        heart_icon = "❤️"
+        
+        fav_card = f"""
+        <div class="favorite-card" data-id="{book['id']}">
+            <div class="fav-image">
+                <img src="{book['image_url']}" alt="{book['title']}" 
+                     onerror="this.src='https://via.placeholder.com/80x120/444/fff?text=No+Image'">
+                <div class="fav-heart">❤️</div>
+            </div>
+            <div class="fav-content">
+                <h4 title="{book['title']}">{book['title']}</h4>
+                <p>{', '.join(book['authors'][:1])}</p>
+                <div class="fav-rating">⭐ {book.get('rating', 0):.1f}</div>
+            </div>
+        </div>
+        """
+        favorites_html += fav_card
+    favorites_html += '</div>'
+    return favorites_html
+
+# Initialize
+books_grid_html = create_books_grid()
+favorites_html = create_favorites_section()
+
 with gr.Blocks(css="""
-/* Main layout */
-.container {
-    display: flex;
-    gap: 20px;
-    margin-bottom: 30px;
-}
-.books-column {
-    flex: 3;
-}
-.details-column {
-    flex: 2;
-    min-height: 600px;
-}
-
-/* Book cards */
-.books-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    gap: 15px;
-    margin-bottom: 30px;
-}
-.book-card {
-    background: #333;
-    border-radius: 12px;
-    padding: 15px;
-    border: 2px solid #444;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    color: #eee;
-}
-.book-card:hover {
-    border-color: #667eea;
-    transform: translateY(-2px);
-}
-.book-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: start;
-    margin-bottom: 10px;
-}
-.book-title {
-    font-weight: bold;
-    font-size: 14px;
-    line-height: 1.3;
-    flex: 1;
-    margin-right: 10px;
-}
-.heart-toggle {
-    font-size: 18px;
-    cursor: pointer;
-    transition: transform 0.2s ease;
-    flex-shrink: 0;
-}
-.heart-toggle:hover {
-    transform: scale(1.2);
-}
-.book-image-container {
-    margin-bottom: 8px;
-}
-.book-card img {
-    width: 100%;
-    height: 160px;
-    object-fit: cover;
-    border-radius: 8px;
-}
-.book-authors {
-    font-size: 12px;
-    color: #88c;
-    margin-bottom: 5px;
-}
-.book-genres {
-    font-size: 11px;
-    color: #888;
-    font-style: italic;
-}
-
-/* Details panel */
-.details-panel {
-    background: #222;
-    border-radius: 12px;
-    padding: 20px;
-    border: 2px solid #444;
-    color: #eee;
-    height: 100%;
-}
-.book-details {
-    text-align: center;
-}
-.detail-image {
-    width: 200px;
-    height: 280px;
-    object-fit: cover;
-    border-radius: 8px;
-    margin-bottom: 15px;
-}
-.book-details h2 {
-    margin: 0 0 15px 0;
-    color: #fff;
-    font-size: 20px;
-}
-.book-details p {
-    margin: 8px 0;
-    text-align: left;
-}
-.description {
-    max-height: 150px;
-    overflow-y: auto;
-    padding: 10px;
-    background: #333;
-    border-radius: 6px;
-    margin: 10px 0;
-    font-size: 14px;
-    line-height: 1.4;
-}
-
-/* Favorite button in details */
-.favorite-section {
-    margin-top: 20px;
-    padding-top: 15px;
-    border-top: 2px solid #ed8936;
-}
-.detail-favorite-btn {
-    background: #ed8936;
-    color: white;
-    border: none;
-    padding: 12px 24px;
-    border-radius: 20px;
-    font-weight: 600;
-    cursor: pointer;
-    font-size: 14px;
-    width: 100%;
-}
-.detail-favorite-btn:hover {
-    background: #dd6b20;
-}
-
-/* Favorites section */
-.favorites-section {
-    background: #222;
-    border-radius: 12px;
-    padding: 20px;
-    border: 2px solid #444;
-    margin-top: 20px;
-}
-.no-favorites {
-    text-align: center;
-    color: #888;
-    padding: 40px;
-    font-size: 16px;
-}
-
-/* Feedback */
-.feedback {
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    background: #48bb78;
-    color: white;
-    padding: 12px 20px;
-    border-radius: 8px;
-    z-index: 1000;
-    font-weight: 600;
-}
+    .app-container {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 20px;
+        background: #1a1a1a;
+        color: white;
+        font-family: 'Segoe UI', Arial, sans-serif;
+    }
+    .main-layout {
+        display: grid;
+        grid-template-columns: 1fr 400px;
+        gap: 30px;
+        align-items: start;
+    }
+    .books-section {
+        background: #222;
+        border-radius: 16px;
+        padding: 25px;
+        border: 1px solid #444;
+    }
+    .details-section {
+        background: #222;
+        border-radius: 16px;
+        padding: 25px;
+        border: 1px solid #444;
+        position: sticky;
+        top: 20px;
+        max-height: 85vh;
+        overflow-y: auto;
+    }
+    .favorites-section {
+        background: #222;
+        border-radius: 16px;
+        padding: 25px;
+        border: 1px solid #444;
+        margin-top: 30px;
+        grid-column: 1 / -1;
+    }
+    .books-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+        gap: 20px;
+    }
+    .book-card {
+        background: #333;
+        border-radius: 12px;
+        padding: 15px;
+        border: 1px solid #555;
+        transition: all 0.3s ease;
+        cursor: pointer;
+        position: relative;
+    }
+    .book-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+        border-color: #667eea;
+    }
+    .card-image {
+        position: relative;
+        margin-bottom: 12px;
+    }
+    .card-image img {
+        width: 100%;
+        height: 200px;
+        object-fit: cover;
+        border-radius: 8px;
+        border: 1px solid #666;
+    }
+    .card-badge {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        background: #667eea;
+        color: white;
+        padding: 4px 8px;
+        border-radius: 10px;
+        font-size: 10px;
+        font-weight: bold;
+    }
+    .heart-btn {
+        position: absolute;
+        top: 8px;
+        left: 8px;
+        background: rgba(0, 0, 0, 0.7);
+        border: none;
+        border-radius: 50%;
+        width: 32px;
+        height: 32px;
+        color: white;
+        font-size: 16px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .heart-btn:hover {
+        background: rgba(237, 137, 54, 0.9);
+        transform: scale(1.1);
+    }
+    .card-content {
+        text-align: center;
+    }
+    .book-title {
+        font-size: 14px;
+        font-weight: 700;
+        color: #fff;
+        margin: 0 0 6px 0;
+        line-height: 1.3;
+        overflow: hidden;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+    }
+    .book-authors {
+        font-size: 12px;
+        color: #88c;
+        margin: 0 0 8px 0;
+        overflow: hidden;
+        display: -webkit-box;
+        -webkit-line-clamp: 1;
+        -webkit-box-orient: vertical;
+    }
+    .book-rating {
+        font-size: 11px;
+        color: #ffa500;
+        margin: 0 0 6px 0;
+    }
+    .rating-text {
+        font-size: 10px;
+        color: #ccc;
+    }
+    .book-genres {
+        font-size: 11px;
+        color: #aaa;
+        margin: 0;
+    }
+    /* Details Panel */
+    .details-content {
+        color: #eee;
+    }
+    .details-header {
+        display: flex;
+        gap: 20px;
+        margin-bottom: 25px;
+        padding-bottom: 20px;
+        border-bottom: 1px solid #444;
+    }
+    .details-header img {
+        width: 120px;
+        height: 180px;
+        object-fit: cover;
+        border-radius: 8px;
+        border: 1px solid #666;
+        flex-shrink: 0;
+    }
+    .header-info {
+        flex-grow: 1;
+    }
+    .header-info h2 {
+        margin: 0 0 8px 0;
+        color: #fff;
+        font-size: 20px;
+        line-height: 1.3;
+    }
+    .authors {
+        color: #88c;
+        margin: 0 0 12px 0;
+        font-size: 14px;
+    }
+    .rating-large {
+        font-size: 16px;
+        color: #ffa500;
+    }
+    .details-grid {
+        display: grid;
+        gap: 12px;
+        margin-bottom: 25px;
+    }
+    .detail-item {
+        display: flex;
+        justify-content: between;
+        padding: 8px 0;
+        border-bottom: 1px solid #333;
+    }
+    .label {
+        font-weight: 600;
+        color: #ccc;
+        min-width: 80px;
+    }
+    .value {
+        color: #fff;
+        flex-grow: 1;
+        text-align: right;
+    }
+    .description-section h3 {
+        color: #fff;
+        margin: 0 0 12px 0;
+        font-size: 16px;
+    }
+    .description-section p {
+        color: #ccc;
+        line-height: 1.5;
+        font-size: 14px;
+        margin: 0;
+        background: #2a2a2a;
+        padding: 15px;
+        border-radius: 8px;
+        border: 1px solid #444;
+    }
+    /* Favorites Section */
+    .favorites-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+        gap: 15px;
+    }
+    .favorite-card {
+        background: #333;
+        border-radius: 10px;
+        padding: 12px;
+        border: 1px solid #555;
+        transition: all 0.3s ease;
+    }
+    .favorite-card:hover {
+        transform: translateY(-2px);
+        border-color: #ed8936;
+    }
+    .fav-image {
+        position: relative;
+        margin-bottom: 8px;
+    }
+    .fav-image img {
+        width: 100%;
+        height: 120px;
+        object-fit: cover;
+        border-radius: 6px;
+        border: 1px solid #666;
+    }
+    .fav-heart {
+        position: absolute;
+        top: 5px;
+        left: 5px;
+        background: rgba(0, 0, 0, 0.7);
+        border-radius: 50%;
+        width: 24px;
+        height: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+    }
+    .fav-content h4 {
+        font-size: 12px;
+        margin: 0 0 4px 0;
+        color: #fff;
+        overflow: hidden;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        line-height: 1.3;
+    }
+    .fav-content p {
+        font-size: 10px;
+        color: #88c;
+        margin: 0 0 4px 0;
+        overflow: hidden;
+        display: -webkit-box;
+        -webkit-line-clamp: 1;
+        -webkit-box-orient: vertical;
+    }
+    .fav-rating {
+        font-size: 10px;
+        color: #ffa500;
+    }
+    .empty-favorites {
+        text-align: center;
+        padding: 40px 20px;
+        color: #888;
+    }
+    .empty-icon {
+        font-size: 48px;
+        margin-bottom: 15px;
+        opacity: 0.5;
+    }
+    .empty-favorites h3 {
+        margin: 0 0 10px 0;
+        color: #ccc;
+    }
+    .empty-favorites p {
+        margin: 0;
+        color: #999;
+    }
+    .feedback-toast {
+        background: #48bb78;
+        color: white;
+        padding: 12px 20px;
+        border-radius: 8px;
+        margin: 10px 0;
+        text-align: center;
+        font-weight: 600;
+        grid-column: 1 / -1;
+    }
+    h1, h2 {
+        color: #fff;
+        margin-bottom: 20px;
+    }
+    .section-title {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: #fff;
+        margin-bottom: 20px;
+        padding-bottom: 10px;
+        border-bottom: 2px solid #667eea;
+    }
 """) as demo:
 
-    gr.Markdown("# 📚 Book Discovery")
-    
-    # Feedback element
-    feedback = gr.HTML("")
-    
-    # Main content area
-    with gr.Row():
-        # Books grid column
-        with gr.Column(scale=3):
-            gr.Markdown("## 📚 All Books")
-            books_grid = gr.HTML()
+    with gr.Column(elem_classes="app-container"):
+        gr.Markdown("# 📚 Book Discovery Hub")
+        gr.Markdown("### Browse books, read details, and build your favorites collection")
         
-        # Details column
-        with gr.Column(scale=2):
-            gr.Markdown("## 📖 Book Details")
-            details_panel = gr.HTML("""
-                <div class='details-panel'>
-                    <div style='text-align: center; color: #888; padding: 40px;'>
-                        Click on any book to see details here
-                    </div>
-                </div>
-            """)
-    
-    # Favorites section
-    with gr.Row():
-        with gr.Column():
-            favorites_header = gr.Markdown("## ⭐ Favorites (0)")
-            favorites_grid = gr.HTML("""
-                <div class='favorites-section'>
-                    <div class='no-favorites'>No favorites yet. Click the 🤍 icon to add books!</div>
-                </div>
-            """)
-
-    # ---------- Functions ----------
-    def handle_book_click(book_id):
-        """Show book details when a book is clicked"""
-        details_html = get_book_details(book_id)
-        return details_html
-
-    def handle_favorite_toggle(book_id):
-        """Handle favorite toggle from JavaScript"""
-        main_grid, fav_grid, header, message = toggle_favorite(book_id)
+        # Feedback message
+        feedback = gr.HTML()
         
-        # Update details panel if it's showing the same book
-        current_details = get_book_details(book_id)
-        
-        # Create feedback message
-        feedback_html = f"""
-        <div class='feedback'>
-            {message}
-        </div>
-        <script>
-            setTimeout(() => {{
-                document.querySelector('.feedback').style.display = 'none';
-            }}, 2000);
-        </script>
-        """
-        
-        return main_grid, fav_grid, header, current_details, feedback_html
-
-    # ---------- JavaScript Integration ----------
-    gr.HTML("""
-    <script>
-    // Global function to toggle favorites
-    function toggleFavorite(bookId) {
-        // Send the toggle request to Gradio
-        const url = new URL(window.location.href);
-        fetch(url, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                data: [bookId],
-                fn_index: 1  // This should be the index of the favorite toggle function
-            })
-        }).then(response => response.json())
-          .then(data => {
-              // The page will update via Gradio's normal update mechanism
-              console.log('Toggled favorite for book:', bookId);
-          });
-    }
-    
-    // Handle book card clicks for details
-    document.addEventListener('click', function(e) {
-        // Check if heart was clicked
-        if (e.target.closest('.heart-toggle')) {
-            const heart = e.target.closest('.heart-toggle');
-            const bookCard = heart.closest('.book-card');
-            const bookId = bookCard.dataset.id;
-            toggleFavorite(bookId);
-            return;
-        }
-        
-        // Check if book card was clicked (but not the heart)
-        const bookCard = e.target.closest('.book-card');
-        if (bookCard && !e.target.closest('.heart-toggle')) {
-            const bookId = bookCard.dataset.id;
+        with gr.Column(elem_classes="main-layout"):
+            # Left: Books Grid
+            with gr.Column(elem_classes="books-section"):
+                gr.Markdown("## 📖 All Books")
+                books_display = gr.HTML(books_grid_html)
             
-            // Send book ID to Gradio to update details panel
-            const url = new URL(window.location.href);
-            fetch(url, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    data: [bookId],
-                    fn_index: 0  // This should be the index of the details function
-                })
-            }).then(response => response.json())
-              .then(data => {
-                  console.log('Showing details for book:', bookId);
-              });
-        }
-    });
-    </script>
-    """)
+            # Right: Details Panel
+            with gr.Column(visible=False, elem_classes="details-section") as details_panel:
+                details_content = gr.HTML()
+                with gr.Row():
+                    details_fav_btn = gr.Button("❤️ Add to Favorites", variant="primary")
+                    details_close_btn = gr.Button("Close", variant="secondary")
+        
+        # Bottom: Favorites Section
+        with gr.Column(elem_classes="favorites-section"):
+            gr.Markdown("## ⭐ Your Favorite Books")
+            favorites_display = gr.HTML(favorites_html)
+    
+    # Create click handlers for each book
+    for i, book in df.iterrows():
+        # Create hidden buttons for book clicks
+        book_click_btn = gr.Button(f"click_{book['id']}", visible=False)
+        book_click_btn.click(
+            lambda bid=book['id']: show_book_details(bid),
+            outputs=[details_panel, details_content, details_fav_btn, details_fav_btn]
+        )
+        
+        # Create hidden buttons for heart toggles
+        heart_btn = gr.Button(f"heart_{book['id']}", visible=False)
+        heart_btn.click(
+            lambda bid=book['id']: toggle_favorite(bid),
+            outputs=[books_display, favorites_display, feedback]
+        )
+    
+    # Details panel actions
+    details_fav_btn.click(
+        lambda: toggle_favorite(current_book_details['id']) if current_book_details else (gr.update(), gr.update(), "No book selected!"),
+        outputs=[books_display, favorites_display, feedback]
+    )
+    
+    details_close_btn.click(
+        lambda: gr.update(visible=False),
+        outputs=[details_panel]
+    )
 
-    # ---------- Initial Load ----------
-    def initial_load():
-        initial_books = df.iloc[:BOOKS_PER_LOAD]
-        main_grid = build_books_grid(initial_books)
-        fav_grid = build_favorites_grid()
-        return main_grid, fav_grid, f"⭐ Favorites ({len(favorites_list)})"
-
-    # Initialize
-    books_grid.value, favorites_grid.value, favorites_header.value = initial_load()
-
-demo.launch(share=True)
+demo.launch()
