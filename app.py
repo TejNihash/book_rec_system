@@ -116,9 +116,7 @@ with gr.Blocks(css="""
   #detail-content { line-height:1.5; font-size:14px; color:#111; }
 """) as demo:
 
-    with gr.Markdown():
-        # Wrapper div for layout
-        print('<div class="app-container">')
+    gr.HTML('<div class="app-container">')  # Opening wrapper div
 
     with gr.Column(elem_classes="main-content"):
         gr.Markdown("# 🎲 Random & Popular Books")
@@ -172,12 +170,10 @@ with gr.Blocks(css="""
         gr.Markdown("## ⭐ Favorites")
         favorites_container = gr.HTML("<p>No favorites yet.</p>")
 
-    with gr.Markdown():
-        print('</div>')  # Close app-container div
+    gr.HTML('</div>')  # Closing wrapper div
 
     # ---------- Detail popup + Favorite button JS + Sidebar update JS ----------
-    # This script handles favorite toggling, updates star icons, and dynamically updates the favorites sidebar
-    gr.HTML(f"""
+    gr.HTML("""
 <div id="detail-overlay">
   <div id="detail-box">
     <span id="detail-close">&times;</span>
@@ -190,20 +186,20 @@ const box = document.getElementById('detail-box');
 const closeBtn = document.getElementById('detail-close');
 const favorites = new Map();  // key: bookId, value: {title, authors, img}
 
-function escapeHtml(str){{
+function escapeHtml(str){
     return str ? String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
               .replace(/"/g,'&quot;').replace(/'/g,'&#39;') : "";
-}}
+}
 
-function updateFavoritesSidebar() {{
-    const container = document.querySelector('.sidebar > div');
-    if (!container) return;  // fallback
-    if (favorites.size === 0) {{
-        container.innerHTML = "<p>No favorites yet.</p>";
+function updateFavoritesSidebar() {
+    const sidebarContent = document.querySelector('.sidebar > div');
+    if (!sidebarContent) return;
+    if (favorites.size === 0) {
+        sidebarContent.innerHTML = "<p>No favorites yet.</p>";
         return;
-    }}
+    }
     let html = "";
-    favorites.forEach((book, id) => {{
+    favorites.forEach((book, id) => {
         html += `
         <div class="sidebar-book" data-id="${id}">
             <img src="${escapeHtml(book.img)}" alt="${escapeHtml(book.title)}" />
@@ -213,33 +209,33 @@ function updateFavoritesSidebar() {{
             </div>
         </div>
         `;
-    }});
-    container.innerHTML = html;
-}}
+    });
+    sidebarContent.innerHTML = html;
+}
 
-document.addEventListener('click', e => {{
+document.addEventListener('click', e => {
     const favBtn = e.target.closest('.fav-btn');
-    if (favBtn) {{
+    if (favBtn) {
         e.stopPropagation();
         const card = favBtn.closest('.book-card');
         const bookId = card.dataset.id;
         const title = card.dataset.title;
         const authors = card.dataset.authors;
         const img = card.dataset.img;
-        if (favorites.has(bookId)) {{
+        if (favorites.has(bookId)) {
             favorites.delete(bookId);
             favBtn.classList.remove('fav-active');
             favBtn.title = 'Add to Favorites';
             favBtn.innerHTML = '&#9734;';
-        }} else {{
-            favorites.set(bookId, {{title:title, authors:authors, img:img}});
+        } else {
+            favorites.set(bookId, {title:title, authors:authors, img:img});
             favBtn.classList.add('fav-active');
             favBtn.title = 'Remove from Favorites';
             favBtn.innerHTML = '&#9733;';
-        }}
+        }
         updateFavoritesSidebar();
         return;
-    }}
+    }
 
     const card = e.target.closest('.book-card'); 
     if (!card) return;
@@ -263,11 +259,11 @@ document.addEventListener('click', e => {{
     box.style.left = Math.min(rect.left, window.innerWidth - box.offsetWidth - 10) + 'px';
     box.style.top = Math.min(rect.top, window.innerHeight - box.offsetHeight - 10) + 'px';
     overlay.style.display = 'block';
-}});
+});
 
-closeBtn.addEventListener('click', () => {{ overlay.style.display='none'; }});
-overlay.addEventListener('click', e => {{ if(e.target===overlay) overlay.style.display='none'; }});
-document.addEventListener('keydown', e => {{ if(e.key==='Escape') overlay.style.display='none'; }});
+closeBtn.addEventListener('click', () => { overlay.style.display='none'; });
+overlay.addEventListener('click', e => { if(e.target===overlay) overlay.style.display='none'; });
+document.addEventListener('keydown', e => { if(e.key==='Escape') overlay.style.display='none'; });
 </script>
 """)
 
