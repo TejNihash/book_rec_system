@@ -157,7 +157,7 @@ document.addEventListener('click', e=>{
             favorites.delete(bookId);
             favBtn.classList.remove('fav-active');
         }else{
-            favorites.set(bookId,{title,title,authors,img});
+            favorites.set(bookId,{title,authors,img});
             favBtn.classList.add('fav-active');
         }
         updateFavoritesSidebar();
@@ -171,6 +171,7 @@ document.addEventListener('click', e=>{
     const genres = card.dataset.genres;
     const desc = card.dataset.desc;
     const img = card.dataset.img;
+
     document.getElementById('detail-content').innerHTML = `
         <div style="display:flex;gap:16px;align-items:flex-start;">
             <img src="${img}" style="width:220px;height:auto;border-radius:6px;object-fit:cover;">
@@ -182,10 +183,26 @@ document.addEventListener('click', e=>{
             </div>
         </div>
     `;
+
     const rect = card.getBoundingClientRect();
-    box.style.left = Math.min(rect.right + 10, window.innerWidth - box.offsetWidth - 10) + 'px';
-    box.style.top = Math.min(rect.top, window.innerHeight - box.offsetHeight - 10) + 'px';
+    let left = rect.right + 10;
+    let top = rect.top;
+
+    // Adjust horizontal overflow
+    if (left + box.offsetWidth > window.innerWidth - 20) {
+        left = rect.left - box.offsetWidth - 10;
+    }
+
+    // Adjust vertical overflow
+    if (top + box.offsetHeight > window.innerHeight - 20) {
+        top = window.innerHeight - box.offsetHeight - 20;
+    }
+
+    box.style.left = `${Math.max(left, 10)}px`;
+    box.style.top = `${Math.max(top, 10)}px`;
+
     overlay.style.display='block';
+    box.scrollIntoView({ behavior: "smooth", block: "nearest" });
 });
 
 closeBtn.addEventListener('click',()=>{overlay.style.display='none';});
