@@ -29,6 +29,20 @@ def create_book_card(book, show_fav_button=True):
     is_favorite = any(fav['id'] == book["id"] for fav in favorites_list)
     fav_text = "💔 Remove from Favorites" if is_favorite else "❤️ Add to Favorites"
     fav_class = "favorite-btn remove" if is_favorite else "favorite-btn"
+
+
+        # Before building card_html
+    if show_fav_button:
+        fav_html = f"""
+        <div style='text-align: center; margin-top: 15px;'>
+            <button class='{fav_class}' onclick="toggleFavorite('{book['id']}')">
+                {fav_text}
+            </button>
+        </div>
+        """
+    else:
+        fav_html = ""
+
     
     card_html = f"""
     <div class='book-card' style='background:#333; border-radius:12px; padding:15px; margin:10px; border:1px solid #555;'>
