@@ -42,7 +42,7 @@ def create_book_card(book, show_fav_button=True):
                     {book.get('year', 'N/A')}
                 </div>
             </div>
-            
+    
             <!-- Book Info -->
             <div style='flex-grow: 1;'>
                 <h3 style='margin: 0 0 8px 0; color: #fff;'>{book['title']}</h3>
@@ -50,7 +50,7 @@ def create_book_card(book, show_fav_button=True):
                 <p style='margin: 0 0 6px 0; color: #ffa500; font-size: 14px;'><strong>Rating:</strong> {stars} ({rating:.1f})</p>
                 <p style='margin: 0 0 6px 0; color: #ccc; font-size: 14px;'><strong>Pages:</strong> {book.get('pages', 'N/A')}</p>
                 <p style='margin: 0 0 10px 0; color: #ccc; font-size: 14px;'><strong>Genres:</strong> {', '.join(book['genres'][:3])}</p>
-                
+    
                 <!-- Description -->
                 <div style='background:#222; padding:10px; border-radius:6px; border:1px solid #444; max-height: 80px; overflow-y: auto;'>
                     <p style='margin: 0; color: #eee; font-size: 13px; line-height: 1.4;'>
@@ -59,11 +59,12 @@ def create_book_card(book, show_fav_button=True):
                 </div>
             </div>
         </div>
-        
+    
         <!-- Favorite Button -->
-        {f"<div style='text-align: center; margin-top: 15px;'><button class='{fav_class}' onclick='toggleFavorite(\"{book['id']}\")'>{fav_text}</button></div>" if show_fav_button else ""}
+        {fav_html}
     </div>
     """
+
     return card_html
 
 def toggle_favorite(book_id):
