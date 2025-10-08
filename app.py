@@ -59,7 +59,20 @@ with gr.Blocks(css="""
 .book-authors { font-size:10px; color:#555; margin-bottom:6px; }
 .fav-btn { background:#667eea; color:white; border:none; border-radius:6px; padding:4px 8px; font-size:10px; cursor:pointer; }
 .fav-btn:hover { background:#5563d9; }
-.sidebar { background:#f7f7f7; border-left:1px solid #ccc; padding:12px; min-width:200px; max-width:250px; overflow-y:auto; }
+.sidebar {
+    position: sticky;
+    top: 10px;            /* distance from the top of the screen */
+    align-self: flex-start;
+    background: #f7f7f7;
+    border-left: 1px solid #ccc;
+    padding: 12px;
+    min-width: 220px;
+    max-width: 250px;
+    height: fit-content;
+    overflow-y: auto;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
 .fav-item { background:#fff; border-radius:6px; padding:8px; margin-bottom:8px; box-shadow:0 2px 6px rgba(0,0,0,0.1); font-size:12px; color:#222; }
 #detail-overlay { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:1000; }
 #detail-box { position:absolute; background:#fff; border-radius:8px; padding:16px; max-width:600px; box-shadow:0 8px 20px rgba(0,0,0,0.35); color:#111; }
