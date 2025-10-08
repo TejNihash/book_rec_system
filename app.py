@@ -122,6 +122,38 @@ def update_favorites_display():
     
     return favorites_df, html, gr.update(visible=load_more_visible), count_html
 
+
+# Replace the favorite action handler with this simple version:
+
+# Simple favorite function
+def handle_simple_favorite(book_id):
+    """Simple function to handle favorites"""
+    global favorites_list
+    
+    if book_id:
+        # Find the book
+        book_match = df[df['id'] == book_id]
+        if not book_match.empty:
+            book_data = book_match.iloc[0].to_dict()
+            
+            # Add to favorites if not already there
+            if not any(fav['id'] == book_id for fav in favorites_list):
+                favorites_list.append(book_data)
+                print(f"✅ SIMPLE: Added '{book_data['title']}' to favorites")
+                
+                # Update display
+                favorites_df, html, load_more_visible, header = update_favorites_display()
+                return favorites_df, html, load_more_visible, header, "❤️ Added to favorites!"
+    
+    return favorites_state.value, favorites_container.value, favorites_load_more_btn.visible, favorites_header.value, "⚠️ Could not add to favorites"
+
+# Connect the simple trigger
+add_fav_trigger.click(
+    handle_simple_favorite,
+    inputs=[add_fav_book_id],
+    outputs=[favorites_state, favorites_container, favorites_load_more_btn, favorites_header, feedback]
+)
+
 # ---------- Gradio UI ----------
 with gr.Blocks(css="""
 .books-section { border:1px solid #555; border-radius:12px; padding:16px; height:500px; overflow-y:auto; margin-bottom:20px; background:#222; }
