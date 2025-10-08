@@ -276,7 +276,7 @@ with gr.Blocks(css="""
 # Replace the favorite action handler with this simple version:
 
 # Simple favorite function
-    def handle_simple_favorite(book_id):
+    def handle_favorite_click(book_id):
         """Simple function to handle favorites"""
         global favorites_list
         
