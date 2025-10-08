@@ -20,19 +20,20 @@ BOOKS_PER_LOAD = 12
 # ---------- Global Favorites Storage ----------
 favorites_list = []
 
-# ---------- Simple Helper Functions ----------
+# ---------- Helpers ----------
 def create_book_card_html(book, is_favorite=False):
     rating = book.get("rating", 0)
     stars = "⭐" * int(rating) + "☆" * (5 - int(rating))
     if rating % 1 >= 0.5:
         stars = "⭐" * (int(rating)+1) + "☆" * (4 - int(rating))
+    description = book.get("description", "No description available.")
     
     favorite_indicator = "❤️ " if is_favorite else ""
     
     return f"""
     <div class='book-card' data-id='{book["id"]}' data-title="{book['title']}" 
          data-authors="{', '.join(book['authors'])}" data-genres="{', '.join(book['genres'])}" 
-         data-img="{book['image_url']}" data-desc="{book.get('description', 'No description')}"
+         data-img="{book['image_url']}" data-desc="{description}"
          data-rating="{rating}" data-year="{book.get('year', 'N/A')}" data-pages="{book.get('pages', 'N/A')}">
         <div class='book-image-container'>
             <img src="{book['image_url']}" onerror="this.src='https://via.placeholder.com/150x220/444/fff?text=No+Image'">
@@ -53,7 +54,7 @@ def create_book_card_html(book, is_favorite=False):
 def build_books_grid_html(books_df, is_favorites_section=False):
     if books_df.empty:
         if is_favorites_section:
-            return "<div style='text-align: center; padding: 40px; color: #888; font-size: 16px;'>No favorite books yet. Click the favorite button in book details to add some!</div>"
+            return "<div style='text-align: center; padding: 40px; color: #888; font-size: 16px;'>No favorite books yet. Click the ❤️ button in book details to add some!</div>"
         return "<div style='text-align: center; padding: 40px; color: #888;'>No books found</div>"
     
     cards_html = []
@@ -62,28 +63,26 @@ def build_books_grid_html(books_df, is_favorites_section=False):
         cards_html.append(create_book_card_html(book, is_fav))
     return f"<div class='books-grid'>{''.join(cards_html)}</div>"
 
-# ---------- SIMPLE Favorites Functions ----------
+# ---------- Favorites Functions ----------
 def add_to_favorites(book_id):
-    """Simple function to add book to favorites"""
+    """Add a book to favorites"""
     global favorites_list
     
-    # Find the book
+    # Find the book in dataframe
     book_match = df[df['id'] == book_id]
     if not book_match.empty:
         book_data = book_match.iloc[0].to_dict()
         
-        # Add if not already there
+        # Check if already in favorites
         if not any(fav['id'] == book_id for fav in favorites_list):
             favorites_list.append(book_data)
             print(f"✅ Added '{book_data['title']}' to favorites")
             return True, f"❤️ Added '{book_data['title']}' to favorites!"
-        else:
-            return False, "⚠️ Already in favorites!"
     
-    return False, "❌ Book not found!"
+    return False, "⚠️ Book already in favorites!"
 
 def remove_from_favorites(book_id):
-    """Simple function to remove book from favorites"""
+    """Remove a book from favorites"""
     global favorites_list
     
     book_title = None
@@ -100,19 +99,13 @@ def remove_from_favorites(book_id):
     
     return False, "❌ Book not found in favorites!"
 
-def toggle_favorite(book_id):
-    """Simple toggle function"""
-    if any(fav['id'] == book_id for fav in favorites_list):
-        return remove_from_favorites(book_id)
-    else:
-        return add_to_favorites(book_id)
-
 def update_favorites_display():
     """Update the favorites section"""
     favorites_df = pd.DataFrame(favorites_list)
     html = build_books_grid_html(favorites_df, is_favorites_section=True)
     load_more_visible = len(favorites_list) > BOOKS_PER_LOAD
     
+    # Update favorites header with count
     count_html = f"""
     <div style="display: flex; align-items: center; margin-bottom: 12px;">
         <h2 style="margin: 0; color: #fff; border-left: 4px solid #ed8936; padding-left: 10px;">⭐ Favorites</h2>
@@ -122,8 +115,21 @@ def update_favorites_display():
     
     return favorites_df, html, gr.update(visible=load_more_visible), count_html
 
-
-
+def handle_favorite_action(book_id, action):
+    """Handle favorite actions (add/remove)"""
+    if action == "add":
+        success, message = add_to_favorites(book_id)
+    else:  # remove
+        success, message = remove_from_favorites(book_id)
+    
+    if success:
+        # Update favorites display
+        favorites_df, html, load_more_visible, header = update_favorites_display()
+        return favorites_df, html, load_more_visible, header, message
+    else:
+        # Return current state with error message
+        favorites_df, html, load_more_visible, header = update_favorites_display()
+        return favorites_df, html, load_more_visible, header, message
 
 # ---------- Gradio UI ----------
 with gr.Blocks(css="""
@@ -188,13 +194,6 @@ with gr.Blocks(css="""
     gr.Markdown("## 📈 Popular Books")
     popular_books_container = gr.HTML(elem_classes="books-section")
     popular_load_more_btn = gr.Button("📚 Load More Popular Books", elem_classes="load-more-btn")
-    
-    # ---------- Simple Favorites Trigger (using same pattern as other buttons) ----------
-    with gr.Row(visible=False) as hidden_row:
-        # Simple trigger that works like other buttons
-        add_fav_trigger = gr.Button("Add Favorite Simple")
-        add_fav_book_id = gr.Textbox(value="")
-
 
     # ---------- Favorites Section ----------
     with gr.Column():
@@ -206,21 +205,15 @@ with gr.Blocks(css="""
         """)
         favorites_container = gr.HTML(
             elem_classes="books-section", 
-            value="<div style='text-align: center; padding: 40px; color: #888; font-size: 16px;'>No favorite books yet. Click the favorite button in book details to add some!</div>"
+            value="<div style='text-align: center; padding: 40px; color: #888; font-size: 16px;'>No favorite books yet. Click the ❤️ button in book details to add some!</div>"
         )
         favorites_load_more_btn = gr.Button("📚 Load More Favorites", elem_classes="load-more-btn", visible=False)
 
-    # ---------- VISIBLE Favorite Button (not hidden!) ----------
-    gr.Markdown("### ⭐ Add to Favorites")
-    with gr.Row():
-        # Create a dropdown to select books
-        book_choices = [(f"{book['title']} by {', '.join(book['authors'])}", book['id']) for _, book in df.iterrows()]
-        book_dropdown = gr.Dropdown(
-            choices=book_choices,
-            label="Select a book to add to favorites",
-            value=book_choices[0][1] if book_choices else None
-        )
-        favorite_btn = gr.Button("❤️ Add to Favorites", elem_classes="favorite-btn")
+    # ---------- Hidden Components for Favorites ----------
+    with gr.Row(visible=False):
+        favorite_book_id = gr.Textbox(value="", label="Book ID")
+        favorite_action = gr.Textbox(value="", label="Action")
+        trigger_favorite = gr.Button("Trigger Favorite")
 
     # ---------- States ----------
     random_books_state = gr.State(df.sample(frac=1).reset_index(drop=True))
@@ -235,7 +228,7 @@ with gr.Blocks(css="""
     favorites_display_state = gr.State(pd.DataFrame())
     favorites_index_state = gr.State(0)
 
-    # ---------- SIMPLE Functions ----------
+    # ---------- Functions ----------
     def load_more_random(loaded_books, display_books, page_idx):
         start = page_idx * BOOKS_PER_LOAD
         end = start + BOOKS_PER_LOAD
@@ -272,37 +265,9 @@ with gr.Blocks(css="""
         html = build_books_grid_html(initial_books)
         return shuffled, initial_books, html, 1
 
-    # SIMPLE FAVORITE FUNCTION - This WILL work!
-# Replace the favorite action handler with this simple version:
-
-# Simple favorite function
-    def handle_favorite_click(book_id):
-        """Simple function to handle favorites"""
-        global favorites_list
-        
-        if book_id:
-            # Find the book
-            book_match = df[df['id'] == book_id]
-            if not book_match.empty:
-                book_data = book_match.iloc[0].to_dict()
-                
-                # Add to favorites if not already there
-                if not any(fav['id'] == book_id for fav in favorites_list):
-                    favorites_list.append(book_data)
-                    print(f"✅ SIMPLE: Added '{book_data['title']}' to favorites")
-                    
-                    # Update display
-                    favorites_df, html, load_more_visible, header = update_favorites_display()
-                    return favorites_df, html, load_more_visible, header, "❤️ Added to favorites!"
-        
-        return favorites_state.value, favorites_container.value, favorites_load_more_btn.visible, favorites_header.value, "⚠️ Could not add to favorites"
-    
-    # Connect the simple trigger
-    add_fav_trigger.click(
-        handle_simple_favorite,
-        inputs=[add_fav_book_id],
-        outputs=[favorites_state, favorites_container, favorites_load_more_btn, favorites_header, feedback]
-    )
+    def execute_favorite_action(book_id, action):
+        """Execute the favorite action and return updated components"""
+        return handle_favorite_action(book_id, action)
 
     # ---------- Event Handlers ----------
     random_load_more_btn.click(
@@ -329,10 +294,10 @@ with gr.Blocks(css="""
         [favorites_display_state, favorites_container, favorites_load_more_btn, favorites_index_state]
     )
 
-    # VISIBLE FAVORITE BUTTON HANDLER - This WILL work!
-    favorite_btn.click(
-        handle_favorite_click,
-        inputs=[book_dropdown],
+    # Main favorite action handler
+    trigger_favorite.click(
+        execute_favorite_action,
+        inputs=[favorite_book_id, favorite_action],
         outputs=[favorites_state, favorites_container, favorites_load_more_btn, favorites_header, feedback]
     )
 
@@ -347,210 +312,202 @@ with gr.Blocks(css="""
     popular_display_state.value, popular_books_container.value, popular_index_state.value = initial_load(popular_books_state.value)
     favorites_state.value, favorites_container.value, favorites_index_state.value = pd.DataFrame(), favorites_container.value, 0
 
-    # ---------- Popup with SIMPLE Favorite Integration ----------
-# Replace the ENTIRE popup JavaScript section with this:
+    # ---------- Working Popup with Favorites Button ----------
+    gr.HTML("""
+    <div class="popup-overlay" id="popup-overlay"></div>
+    <div class="popup-container" id="popup-container">
+        <span class="popup-close" id="popup-close">&times;</span>
+        <div class="popup-content" id="popup-content"></div>
+    </div>
 
-gr.HTML("""
-<div class="popup-overlay" id="popup-overlay"></div>
-<div class="popup-container" id="popup-container">
-    <span class="popup-close" id="popup-close">&times;</span>
-    <div class="popup-content" id="popup-content"></div>
-</div>
+    <script>
+    const overlay = document.getElementById('popup-overlay');
+    const container = document.getElementById('popup-container');
+    const closeBtn = document.getElementById('popup-close');
+    const content = document.getElementById('popup-content');
 
-<script>
-const overlay = document.getElementById('popup-overlay');
-const container = document.getElementById('popup-container');
-const closeBtn = document.getElementById('popup-close');
-const content = document.getElementById('popup-content');
+    let currentBookId = null;
+    let originalScrollPosition = 0;
 
-let currentBookId = null;
-let originalScrollPosition = 0;
-
-function escapeHtml(str) {
-    return str ? String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;') : "";
-}
-
-function formatText(text) {
-    if (!text) return 'No description available.';
-    return text.replace(/\\n/g, '<br>');
-}
-
-// SIMPLE FAVORITES FUNCTION - Uses same pattern as other working buttons
-function addToFavorites(bookId) {
-    console.log('🎯 SIMPLE: Adding to favorites:', bookId);
-    
-    // Find the simple trigger button and input
-    const buttons = Array.from(document.querySelectorAll('button'));
-    const inputs = Array.from(document.querySelectorAll('input[type="text"]'));
-    
-    let triggerBtn = null;
-    let bookIdInput = null;
-    
-    // Find the "Add Favorite Simple" button
-    for (let btn of buttons) {
-        if (btn.textContent.includes('Add Favorite Simple')) {
-            triggerBtn = btn;
-            break;
-        }
+    function escapeHtml(str) {
+        return str ? String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;') : "";
     }
-    
-    // Find the book ID input (look for hidden inputs)
-    for (let input of inputs) {
-        const parent = input.closest('.row');
-        if (parent && parent.style.display === 'none') {
-            bookIdInput = input;
-            break;
-        }
+
+    function formatText(text) {
+        if (!text) return 'No description available.';
+        return text.replace(/\\n/g, '<br>');
     }
-    
-    if (triggerBtn && bookIdInput) {
-        console.log('✅ Found components:', {triggerBtn, bookIdInput});
+
+    function showFeedback(message, isSuccess = true) {
+        const existing = document.querySelector('.feedback-toast');
+        if (existing) existing.remove();
         
-        // SIMPLE: Just set the value and click the button
-        bookIdInput.value = bookId;
+        const feedback = document.createElement('div');
+        feedback.className = 'feedback-toast';
+        feedback.style.background = isSuccess ? '#48bb78' : '#f56565';
+        feedback.textContent = message;
+        document.body.appendChild(feedback);
         
-        // Small delay to ensure value is set
         setTimeout(() => {
-            triggerBtn.click();
-            console.log('✅ Button clicked successfully');
-            
-            // Show feedback
-            showFeedback('❤️ Added to favorites!');
-            
-            // Close popup after a moment
-            setTimeout(() => {
-                closePopup();
-            }, 1000);
-            
-        }, 100);
-        
-    } else {
-        console.error('❌ Could not find components');
-        console.log('Available buttons:', buttons.map(b => b.textContent));
-        console.log('Available inputs:', inputs.map(i => i.value));
-        showFeedback('Error: Could not add to favorites', false);
+            if (document.body.contains(feedback)) {
+                document.body.removeChild(feedback);
+            }
+        }, 3000);
     }
-}
 
-function showFeedback(message, isSuccess = true) {
-    const existing = document.querySelector('.feedback-toast');
-    if (existing) existing.remove();
-    
-    const feedback = document.createElement('div');
-    feedback.className = 'feedback-toast';
-    feedback.style.background = isSuccess ? '#48bb78' : '#f56565';
-    feedback.textContent = message;
-    document.body.appendChild(feedback);
-    
-    setTimeout(() => {
-        if (document.body.contains(feedback)) {
-            document.body.removeChild(feedback);
+    function triggerFavoriteAction(bookId, action) {
+        console.log('🎯 Triggering favorite action:', action, 'for book:', bookId);
+        
+        // Find ALL inputs and buttons
+        const allInputs = Array.from(document.querySelectorAll('input'));
+        const allButtons = Array.from(document.querySelectorAll('button'));
+        
+        let bookIdInput = null;
+        let actionInput = null;
+        let triggerBtn = null;
+        
+        // Find inputs by their labels
+        for (let input of allInputs) {
+            const label = input.getAttribute('aria-label');
+            if (label === 'Book ID') bookIdInput = input;
+            if (label === 'Action') actionInput = input;
         }
-    }, 3000);
-}
-
-// Handle book card clicks (this part works fine)
-document.addEventListener('click', function(e) {
-    const card = e.target.closest('.book-card');
-    if (!card) return;
-    
-    originalScrollPosition = window.scrollY || document.documentElement.scrollTop;
-    currentBookId = card.dataset.id;
-    
-    const title = card.dataset.title;
-    const authors = card.dataset.authors;
-    const genres = card.dataset.genres;
-    const desc = card.dataset.desc;
-    const img = card.dataset.img;
-    const rating = card.dataset.rating || '0';
-    const year = card.dataset.year || 'N/A';
-    const pages = card.dataset.pages || 'N/A';
-    
-    const numRating = parseFloat(rating);
-    const fullStars = Math.floor(numRating);
-    const hasHalfStar = numRating % 1 >= 0.5;
-    let stars = '⭐'.repeat(fullStars);
-    if (hasHalfStar) stars += '½';
-    stars += '☆'.repeat(5 - fullStars - (hasHalfStar ? 1 : 0));
-    
-    // Check if book is in favorites by looking for heart in title
-    const isFavorite = card.querySelector('.book-title').textContent.includes('❤️');
-    const favoriteButtonText = isFavorite ? '💔 Remove from Favorites' : '❤️ Add to Favorites';
-    const favoriteButtonClass = isFavorite ? 'favorite-btn remove' : 'favorite-btn';
-    
-    content.innerHTML = `
-        <div style="display: flex; gap: 20px; align-items: flex-start; margin-bottom: 20px;">
-            <img src="${img}" style="width: 180px; height: auto; border-radius: 8px; object-fit: cover; box-shadow: 0 4px 12px rgba(0,0,0,0.5);">
-            <div style="flex: 1;">
-                <h2 style="margin: 0 0 12px 0; color: #fff; border-bottom: 2px solid #667eea; padding-bottom: 8px;">${escapeHtml(title)}</h2>
-                <p style="margin: 0 0 8px 0; font-size: 14px;"><strong style="color: #88c;">Author(s):</strong> <span style="color: #667eea;">${escapeHtml(authors)}</span></p>
-                <p style="margin: 0 0 8px 0; font-size: 14px;"><strong style="color: #88c;">Genres:</strong> <span style="color: #a78bfa;">${escapeHtml(genres)}</span></p>
-                <p style="margin: 0 0 8px 0; font-size: 14px;"><strong style="color: #88c;">Rating:</strong> ${stars} <strong style="color: #ffa500;">${parseFloat(rating).toFixed(1)}</strong></p>
-            </div>
-        </div>
         
-        <div class="detail-stats">
-            <div class="detail-stat">
-                <div class="detail-stat-value">${escapeHtml(year)}</div>
-                <div class="detail-stat-label">PUBLICATION YEAR</div>
-            </div>
-            <div class="detail-stat">
-                <div class="detail-stat-value">${escapeHtml(pages)}</div>
-                <div class="detail-stat-label">PAGES</div>
-            </div>
-            <div class="detail-stat">
-                <div class="detail-stat-value">${Math.ceil(parseInt(pages) / 250) || 'N/A'}</div>
-                <div class="detail-stat-label">READING TIME (HOURS)</div>
-            </div>
-        </div>
+        // Find trigger button by text
+        for (let btn of allButtons) {
+            const text = btn.textContent || btn.innerText;
+            if (text === 'Trigger Favorite') {
+                triggerBtn = btn;
+                break;
+            }
+        }
         
-        <div style="margin-top: 16px;">
-            <h3 style="margin: 0 0 10px 0; color: #fff; font-size: 16px; border-left: 3px solid #667eea; padding-left: 8px;">Description</h3>
-            <div class="description-scroll">
-                ${formatText(escapeHtml(desc))}
-            </div>
-        </div>
-        
-        <div class="favorite-action-section">
-            <button class="${favoriteButtonClass}" onclick="addToFavorites('${currentBookId}')">
-                ${favoriteButtonText}
-            </button>
-            <p style="margin: 8px 0 0 0; color: #888; font-size: 12px;">Click to ${isFavorite ? 'remove from' : 'add to'} your favorites collection</p>
-        </div>
-    `;
-    
-    overlay.style.display = 'block';
-    container.style.display = 'block';
-    document.body.style.overflow = 'hidden';
-});
-
-function closePopup() {
-    overlay.style.display = 'none';
-    container.style.display = 'none';
-    document.body.style.overflow = 'auto';
-    window.scrollTo(0, originalScrollPosition);
-}
-
-closeBtn.addEventListener('click', closePopup);
-overlay.addEventListener('click', closePopup);
-
-document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape') {
-        closePopup();
+        if (bookIdInput && actionInput && triggerBtn) {
+            console.log('✅ Found all components');
+            
+            // Set values
+            bookIdInput.value = bookId;
+            actionInput.value = action;
+            
+            // Trigger input events
+            bookIdInput.dispatchEvent(new Event('input', { bubbles: true }));
+            actionInput.dispatchEvent(new Event('input', { bubbles: true }));
+            
+            // Click the button
+            setTimeout(() => {
+                triggerBtn.click();
+                console.log('✅ Favorite action completed');
+                
+                // Show feedback
+                const message = action === 'add' ? '❤️ Added to favorites!' : '💔 Removed from favorites!';
+                showFeedback(message, true);
+                
+            }, 100);
+            
+        } else {
+            console.error('❌ Could not find components');
+            showFeedback('Error: Could not update favorites', false);
+        }
     }
-});
 
-container.addEventListener('click', function(e) {
-    e.stopPropagation();
-});
-
-// Make function globally available
-window.addToFavorites = addToFavorites;
-</script>
-""")
-
-
-
+    // Handle book card clicks
+    document.addEventListener('click', function(e) {
+        const card = e.target.closest('.book-card');
+        if (!card) return;
         
+        originalScrollPosition = window.scrollY || document.documentElement.scrollTop;
+        currentBookId = card.dataset.id;
+        
+        const title = card.dataset.title;
+        const authors = card.dataset.authors;
+        const genres = card.dataset.genres;
+        const desc = card.dataset.desc;
+        const img = card.dataset.img;
+        const rating = card.dataset.rating || '0';
+        const year = card.dataset.year || 'N/A';
+        const pages = card.dataset.pages || 'N/A';
+        
+        const numRating = parseFloat(rating);
+        const fullStars = Math.floor(numRating);
+        const hasHalfStar = numRating % 1 >= 0.5;
+        let stars = '⭐'.repeat(fullStars);
+        if (hasHalfStar) stars += '½';
+        stars += '☆'.repeat(5 - fullStars - (hasHalfStar ? 1 : 0));
+        
+        // Check if book is in favorites by looking for heart in title
+        const isFavorite = card.querySelector('.book-title').textContent.includes('❤️');
+        const favoriteButtonText = isFavorite ? '💔 Remove from Favorites' : '❤️ Add to Favorites';
+        const favoriteButtonClass = isFavorite ? 'favorite-btn remove' : 'favorite-btn';
+        const favoriteAction = isFavorite ? 'remove' : 'add';
+        
+        content.innerHTML = `
+            <div style="display: flex; gap: 20px; align-items: flex-start; margin-bottom: 20px;">
+                <img src="${img}" style="width: 180px; height: auto; border-radius: 8px; object-fit: cover; box-shadow: 0 4px 12px rgba(0,0,0,0.5);">
+                <div style="flex: 1;">
+                    <h2 style="margin: 0 0 12px 0; color: #fff; border-bottom: 2px solid #667eea; padding-bottom: 8px;">${escapeHtml(title)}</h2>
+                    <p style="margin: 0 0 8px 0; font-size: 14px;"><strong style="color: #88c;">Author(s):</strong> <span style="color: #667eea;">${escapeHtml(authors)}</span></p>
+                    <p style="margin: 0 0 8px 0; font-size: 14px;"><strong style="color: #88c;">Genres:</strong> <span style="color: #a78bfa;">${escapeHtml(genres)}</span></p>
+                    <p style="margin: 0 0 8px 0; font-size: 14px;"><strong style="color: #88c;">Rating:</strong> ${stars} <strong style="color: #ffa500;">${parseFloat(rating).toFixed(1)}</strong></p>
+                </div>
+            </div>
+            
+            <div class="detail-stats">
+                <div class="detail-stat">
+                    <div class="detail-stat-value">${escapeHtml(year)}</div>
+                    <div class="detail-stat-label">PUBLICATION YEAR</div>
+                </div>
+                <div class="detail-stat">
+                    <div class="detail-stat-value">${escapeHtml(pages)}</div>
+                    <div class="detail-stat-label">PAGES</div>
+                </div>
+                <div class="detail-stat">
+                    <div class="detail-stat-value">${Math.ceil(parseInt(pages) / 250) || 'N/A'}</div>
+                    <div class="detail-stat-label">READING TIME (HOURS)</div>
+                </div>
+            </div>
+            
+            <div style="margin-top: 16px;">
+                <h3 style="margin: 0 0 10px 0; color: #fff; font-size: 16px; border-left: 3px solid #667eea; padding-left: 8px;">Description</h3>
+                <div class="description-scroll">
+                    ${formatText(escapeHtml(desc))}
+                </div>
+            </div>
+            
+            <div class="favorite-action-section">
+                <button class="${favoriteButtonClass}" onclick="triggerFavoriteAction('${currentBookId}', '${favoriteAction}')">
+                    ${favoriteButtonText}
+                </button>
+            </div>
+        `;
+        
+        overlay.style.display = 'block';
+        container.style.display = 'block';
+        document.body.style.overflow = 'hidden';
+    });
+
+    function closePopup() {
+        overlay.style.display = 'none';
+        container.style.display = 'none';
+        document.body.style.overflow = 'auto';
+        window.scrollTo(0, originalScrollPosition);
+    }
+
+    closeBtn.addEventListener('click', closePopup);
+    overlay.addEventListener('click', closePopup);
+
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            closePopup();
+        }
+    });
+
+    container.addEventListener('click', function(e) {
+        e.stopPropagation();
+    });
+
+    // Make function globally available
+    window.triggerFavoriteAction = triggerFavoriteAction;
+    </script>
+    """)
 
 demo.launch()
