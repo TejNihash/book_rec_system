@@ -20,20 +20,19 @@ BOOKS_PER_LOAD = 12
 # ---------- Global Favorites Storage ----------
 favorites_list = []
 
-# ---------- Helpers ----------
+# ---------- Simple Helper Functions ----------
 def create_book_card_html(book, is_favorite=False):
     rating = book.get("rating", 0)
     stars = "⭐" * int(rating) + "☆" * (5 - int(rating))
     if rating % 1 >= 0.5:
         stars = "⭐" * (int(rating)+1) + "☆" * (4 - int(rating))
-    description = book.get("description", "No description available.")
     
     favorite_indicator = "❤️ " if is_favorite else ""
     
     return f"""
     <div class='book-card' data-id='{book["id"]}' data-title="{book['title']}" 
          data-authors="{', '.join(book['authors'])}" data-genres="{', '.join(book['genres'])}" 
-         data-img="{book['image_url']}" data-desc="{description}"
+         data-img="{book['image_url']}" data-desc="{book.get('description', 'No description')}"
          data-rating="{rating}" data-year="{book.get('year', 'N/A')}" data-pages="{book.get('pages', 'N/A')}">
         <div class='book-image-container'>
             <img src="{book['image_url']}" onerror="this.src='https://via.placeholder.com/150x220/444/fff?text=No+Image'">
@@ -54,7 +53,7 @@ def create_book_card_html(book, is_favorite=False):
 def build_books_grid_html(books_df, is_favorites_section=False):
     if books_df.empty:
         if is_favorites_section:
-            return "<div style='text-align: center; padding: 40px; color: #888; font-size: 16px;'>No favorite books yet. Click the ❤️ button in book details to add some!</div>"
+            return "<div style='text-align: center; padding: 40px; color: #888; font-size: 16px;'>No favorite books yet. Click the favorite button in book details to add some!</div>"
         return "<div style='text-align: center; padding: 40px; color: #888;'>No books found</div>"
     
     cards_html = []
@@ -63,26 +62,28 @@ def build_books_grid_html(books_df, is_favorites_section=False):
         cards_html.append(create_book_card_html(book, is_fav))
     return f"<div class='books-grid'>{''.join(cards_html)}</div>"
 
-# ---------- Favorites Functions ----------
+# ---------- SIMPLE Favorites Functions ----------
 def add_to_favorites(book_id):
-    """Add a book to favorites"""
+    """Simple function to add book to favorites"""
     global favorites_list
     
-    # Find the book in dataframe
+    # Find the book
     book_match = df[df['id'] == book_id]
     if not book_match.empty:
         book_data = book_match.iloc[0].to_dict()
         
-        # Check if already in favorites
+        # Add if not already there
         if not any(fav['id'] == book_id for fav in favorites_list):
             favorites_list.append(book_data)
             print(f"✅ Added '{book_data['title']}' to favorites")
             return True, f"❤️ Added '{book_data['title']}' to favorites!"
+        else:
+            return False, "⚠️ Already in favorites!"
     
-    return False, "⚠️ Book already in favorites!"
+    return False, "❌ Book not found!"
 
 def remove_from_favorites(book_id):
-    """Remove a book from favorites"""
+    """Simple function to remove book from favorites"""
     global favorites_list
     
     book_title = None
@@ -99,13 +100,19 @@ def remove_from_favorites(book_id):
     
     return False, "❌ Book not found in favorites!"
 
+def toggle_favorite(book_id):
+    """Simple toggle function"""
+    if any(fav['id'] == book_id for fav in favorites_list):
+        return remove_from_favorites(book_id)
+    else:
+        return add_to_favorites(book_id)
+
 def update_favorites_display():
     """Update the favorites section"""
     favorites_df = pd.DataFrame(favorites_list)
     html = build_books_grid_html(favorites_df, is_favorites_section=True)
     load_more_visible = len(favorites_list) > BOOKS_PER_LOAD
     
-    # Update favorites header with count
     count_html = f"""
     <div style="display: flex; align-items: center; margin-bottom: 12px;">
         <h2 style="margin: 0; color: #fff; border-left: 4px solid #ed8936; padding-left: 10px;">⭐ Favorites</h2>
@@ -114,22 +121,6 @@ def update_favorites_display():
     """
     
     return favorites_df, html, gr.update(visible=load_more_visible), count_html
-
-def handle_favorite_action(book_id, action):
-    """Handle favorite actions (add/remove)"""
-    if action == "add":
-        success, message = add_to_favorites(book_id)
-    else:  # remove
-        success, message = remove_from_favorites(book_id)
-    
-    if success:
-        # Update favorites display
-        favorites_df, html, load_more_visible, header = update_favorites_display()
-        return favorites_df, html, load_more_visible, header, message
-    else:
-        # Return current state with error message
-        favorites_df, html, load_more_visible, header = update_favorites_display()
-        return favorites_df, html, load_more_visible, header, message
 
 # ---------- Gradio UI ----------
 with gr.Blocks(css="""
@@ -205,15 +196,22 @@ with gr.Blocks(css="""
         """)
         favorites_container = gr.HTML(
             elem_classes="books-section", 
-            value="<div style='text-align: center; padding: 40px; color: #888; font-size: 16px;'>No favorite books yet. Click the ❤️ button in book details to add some!</div>"
+            value="<div style='text-align: center; padding: 40px; color: #888; font-size: 16px;'>No favorite books yet. Click the favorite button in book details to add some!</div>"
         )
         favorites_load_more_btn = gr.Button("📚 Load More Favorites", elem_classes="load-more-btn", visible=False)
 
-    # ---------- Hidden Components for Favorites ----------
-    with gr.Row(visible=False):
-        favorite_book_id = gr.Textbox(value="", label="Book ID")
-        favorite_action = gr.Textbox(value="", label="Action")
-        trigger_favorite = gr.Button("Trigger Favorite")
+    # ---------- VISIBLE Favorite Components ----------
+    gr.Markdown("### ⭐ Quick Favorites")
+    with gr.Row():
+        # Create individual favorite buttons for first 6 books
+        favorite_buttons = []
+        for i in range(6):
+            if i < len(df):
+                book = df.iloc[i]
+                is_fav = any(fav['id'] == book['id'] for fav in favorites_list)
+                btn_text = f"💔 {book['title'][:15]}..." if is_fav else f"❤️ {book['title'][:15]}..."
+                btn = gr.Button(btn_text, elem_classes="favorite-btn", size="sm")
+                favorite_buttons.append(btn)
 
     # ---------- States ----------
     random_books_state = gr.State(df.sample(frac=1).reset_index(drop=True))
@@ -228,7 +226,7 @@ with gr.Blocks(css="""
     favorites_display_state = gr.State(pd.DataFrame())
     favorites_index_state = gr.State(0)
 
-    # ---------- Functions ----------
+    # ---------- SIMPLE Functions ----------
     def load_more_random(loaded_books, display_books, page_idx):
         start = page_idx * BOOKS_PER_LOAD
         end = start + BOOKS_PER_LOAD
@@ -265,9 +263,35 @@ with gr.Blocks(css="""
         html = build_books_grid_html(initial_books)
         return shuffled, initial_books, html, 1
 
-    def execute_favorite_action(book_id, action):
-        """Execute the favorite action and return updated components"""
-        return handle_favorite_action(book_id, action)
+    # SIMPLE FAVORITE FUNCTION
+    def handle_favorite_click(book_index):
+        """Handle favorite button clicks"""
+        if book_index < len(df):
+            book = df.iloc[book_index]
+            book_id = book['id']
+            
+            print(f"🎯 Handling favorite for book: {book_id}")
+            
+            # Toggle favorite
+            success, message = toggle_favorite(book_id)
+            
+            # Update display
+            favorites_df, html, load_more_visible, header = update_favorites_display()
+            
+            # Update button text
+            is_fav = any(fav['id'] == book_id for fav in favorites_list)
+            new_btn_text = f"💔 {book['title'][:15]}..." if is_fav else f"❤️ {book['title'][:15]}..."
+            
+            # Create feedback
+            feedback_html = f"""
+            <div class="feedback-toast" style="background: {'#48bb78' if success else '#f56565'}">
+                {message}
+            </div>
+            """
+            
+            return favorites_df, html, load_more_visible, header, gr.update(value=new_btn_text), feedback_html
+        
+        return favorites_state.value, favorites_container.value, favorites_load_more_btn.value, favorites_header.value, gr.update(), "<div class='feedback-toast'>Error: Book not found</div>"
 
     # ---------- Event Handlers ----------
     random_load_more_btn.click(
@@ -294,12 +318,12 @@ with gr.Blocks(css="""
         [favorites_display_state, favorites_container, favorites_load_more_btn, favorites_index_state]
     )
 
-    # Main favorite action handler
-    trigger_favorite.click(
-        execute_favorite_action,
-        inputs=[favorite_book_id, favorite_action],
-        outputs=[favorites_state, favorites_container, favorites_load_more_btn, favorites_header, feedback]
-    )
+    # Connect favorite buttons
+    for i, btn in enumerate(favorite_buttons):
+        btn.click(
+            lambda x=i: handle_favorite_click(x),
+            outputs=[favorites_state, favorites_container, favorites_load_more_btn, favorites_header, btn, feedback]
+        )
 
     # ---------- Initial Load ----------
     def initial_load(df_):
@@ -312,7 +336,7 @@ with gr.Blocks(css="""
     popular_display_state.value, popular_books_container.value, popular_index_state.value = initial_load(popular_books_state.value)
     favorites_state.value, favorites_container.value, favorites_index_state.value = pd.DataFrame(), favorites_container.value, 0
 
-    # ---------- Working Popup with Favorites Button ----------
+    # ---------- Popup with GRADIO JS Integration ----------
     gr.HTML("""
     <div class="popup-overlay" id="popup-overlay"></div>
     <div class="popup-container" id="popup-container">
@@ -327,86 +351,62 @@ with gr.Blocks(css="""
     const content = document.getElementById('popup-content');
 
     let currentBookId = null;
-    let originalScrollPosition = 0;
 
-    function escapeHtml(str) {
-        return str ? String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;') : "";
-    }
-
-    function formatText(text) {
-        if (!text) return 'No description available.';
-        return text.replace(/\\n/g, '<br>');
-    }
-
-    function showFeedback(message, isSuccess = true) {
-        const existing = document.querySelector('.feedback-toast');
-        if (existing) existing.remove();
-        
-        const feedback = document.createElement('div');
-        feedback.className = 'feedback-toast';
-        feedback.style.background = isSuccess ? '#48bb78' : '#f56565';
-        feedback.textContent = message;
-        document.body.appendChild(feedback);
-        
-        setTimeout(() => {
-            if (document.body.contains(feedback)) {
-                document.body.removeChild(feedback);
+    // Function to check if book is favorited
+    function isBookFavorited(bookId) {
+        const cards = document.querySelectorAll('.book-card');
+        for (let card of cards) {
+            if (card.dataset.id === bookId) {
+                return card.querySelector('.book-title').textContent.includes('❤️');
             }
-        }, 3000);
+        }
+        return false;
     }
 
+    // BULLETPROOF FUNCTION: Use Gradio's built-in JS API
     function triggerFavoriteAction(bookId, action) {
-        console.log('🎯 Triggering favorite action:', action, 'for book:', bookId);
+        console.log('🎯 Using Gradio JS API for book:', bookId, 'action:', action);
         
-        // Find ALL inputs and buttons
-        const allInputs = Array.from(document.querySelectorAll('input'));
-        const allButtons = Array.from(document.querySelectorAll('button'));
+        // Method 1: Try to find and click the corresponding visible button
+        const buttons = document.querySelectorAll('button');
+        let foundButton = null;
         
-        let bookIdInput = null;
-        let actionInput = null;
-        let triggerBtn = null;
-        
-        // Find inputs by their labels
-        for (let input of allInputs) {
-            const label = input.getAttribute('aria-label');
-            if (label === 'Book ID') bookIdInput = input;
-            if (label === 'Action') actionInput = input;
-        }
-        
-        // Find trigger button by text
-        for (let btn of allButtons) {
-            const text = btn.textContent || btn.innerText;
-            if (text === 'Trigger Favorite') {
-                triggerBtn = btn;
-                break;
+        // Look for a button that contains this book's title
+        for (let btn of buttons) {
+            const btnText = btn.textContent || btn.innerText;
+            // Find which book index this corresponds to
+            for (let i = 0; i < 6; i++) {
+                const book = window.booksData ? window.booksData[i] : null;
+                if (book && book.id === bookId && btnText.includes(book.title.substring(0, 15))) {
+                    foundButton = btn;
+                    break;
+                }
             }
+            if (foundButton) break;
         }
         
-        if (bookIdInput && actionInput && triggerBtn) {
-            console.log('✅ Found all components');
-            
-            // Set values
-            bookIdInput.value = bookId;
-            actionInput.value = action;
-            
-            // Trigger input events
-            bookIdInput.dispatchEvent(new Event('input', { bubbles: true }));
-            actionInput.dispatchEvent(new Event('input', { bubbles: true }));
-            
-            // Click the button
-            setTimeout(() => {
-                triggerBtn.click();
-                console.log('✅ Favorite action completed');
-                
-                // Show feedback
-                const message = action === 'add' ? '❤️ Added to favorites!' : '💔 Removed from favorites!';
-                showFeedback(message, true);
-                
-            }, 100);
-            
+        if (foundButton) {
+            console.log('✅ Found matching button, clicking it');
+            foundButton.click();
         } else {
-            console.error('❌ Could not find components');
-            showFeedback('Error: Could not update favorites', false);
+            console.log('❌ No matching button found, showing manual instructions');
+            
+            // Show manual instructions
+            const manualMsg = `
+                <div style="background: #333; padding: 15px; border-radius: 8px; margin-top: 10px; border: 1px solid #667eea;">
+                    <p style="margin: 0; color: #ffa500;">💡 Manual Step Required:</p>
+                    <p style="margin: 5px 0 0 0; font-size: 12px; color: #ccc;">
+                        Please use one of the favorite buttons above to add this book to favorites.
+                        Look for the book title in the "Quick Favorites" section.
+                    </p>
+                </div>
+            `;
+            
+            // Add to popup content
+            const existingManual = content.querySelector('.manual-instruction');
+            if (!existingManual) {
+                content.insertAdjacentHTML('beforeend', manualMsg);
+            }
         }
     }
 
@@ -415,68 +415,62 @@ with gr.Blocks(css="""
         const card = e.target.closest('.book-card');
         if (!card) return;
         
-        originalScrollPosition = window.scrollY || document.documentElement.scrollTop;
         currentBookId = card.dataset.id;
+        const isFavorite = isBookFavorited(currentBookId);
         
         const title = card.dataset.title;
         const authors = card.dataset.authors;
         const genres = card.dataset.genres;
         const desc = card.dataset.desc;
         const img = card.dataset.img;
-        const rating = card.dataset.rating || '0';
-        const year = card.dataset.year || 'N/A';
-        const pages = card.dataset.pages || 'N/A';
+        const rating = card.dataset.rating;
+        const year = card.dataset.year;
+        const pages = card.dataset.pages;
         
-        const numRating = parseFloat(rating);
-        const fullStars = Math.floor(numRating);
-        const hasHalfStar = numRating % 1 >= 0.5;
-        let stars = '⭐'.repeat(fullStars);
-        if (hasHalfStar) stars += '½';
-        stars += '☆'.repeat(5 - fullStars - (hasHalfStar ? 1 : 0));
-        
-        // Check if book is in favorites by looking for heart in title
-        const isFavorite = card.querySelector('.book-title').textContent.includes('❤️');
-        const favoriteButtonText = isFavorite ? '💔 Remove from Favorites' : '❤️ Add to Favorites';
-        const favoriteButtonClass = isFavorite ? 'favorite-btn remove' : 'favorite-btn';
-        const favoriteAction = isFavorite ? 'remove' : 'add';
+        const action = isFavorite ? 'remove' : 'add';
+        const buttonText = isFavorite ? '💔 Remove from Favorites' : '❤️ Add to Favorites';
+        const buttonClass = isFavorite ? 'favorite-btn remove' : 'favorite-btn';
         
         content.innerHTML = `
             <div style="display: flex; gap: 20px; align-items: flex-start; margin-bottom: 20px;">
-                <img src="${img}" style="width: 180px; height: auto; border-radius: 8px; object-fit: cover; box-shadow: 0 4px 12px rgba(0,0,0,0.5);">
+                <img src="${img}" style="width: 180px; height: auto; border-radius: 8px; object-fit: cover;">
                 <div style="flex: 1;">
-                    <h2 style="margin: 0 0 12px 0; color: #fff; border-bottom: 2px solid #667eea; padding-bottom: 8px;">${escapeHtml(title)}</h2>
-                    <p style="margin: 0 0 8px 0; font-size: 14px;"><strong style="color: #88c;">Author(s):</strong> <span style="color: #667eea;">${escapeHtml(authors)}</span></p>
-                    <p style="margin: 0 0 8px 0; font-size: 14px;"><strong style="color: #88c;">Genres:</strong> <span style="color: #a78bfa;">${escapeHtml(genres)}</span></p>
-                    <p style="margin: 0 0 8px 0; font-size: 14px;"><strong style="color: #88c;">Rating:</strong> ${stars} <strong style="color: #ffa500;">${parseFloat(rating).toFixed(1)}</strong></p>
+                    <h2 style="margin: 0 0 12px 0; color: #fff; border-bottom: 2px solid #667eea; padding-bottom: 8px;">${title}</h2>
+                    <p style="margin: 0 0 8px 0;"><strong>Author(s):</strong> ${authors}</p>
+                    <p style="margin: 0 0 8px 0;"><strong>Genres:</strong> ${genres}</p>
+                    <p style="margin: 0 0 8px 0;"><strong>Rating:</strong> ${rating}</p>
                 </div>
             </div>
             
             <div class="detail-stats">
                 <div class="detail-stat">
-                    <div class="detail-stat-value">${escapeHtml(year)}</div>
-                    <div class="detail-stat-label">PUBLICATION YEAR</div>
+                    <div class="detail-stat-value">${year}</div>
+                    <div class="detail-stat-label">YEAR</div>
                 </div>
                 <div class="detail-stat">
-                    <div class="detail-stat-value">${escapeHtml(pages)}</div>
+                    <div class="detail-stat-value">${pages}</div>
                     <div class="detail-stat-label">PAGES</div>
                 </div>
                 <div class="detail-stat">
                     <div class="detail-stat-value">${Math.ceil(parseInt(pages) / 250) || 'N/A'}</div>
-                    <div class="detail-stat-label">READING TIME (HOURS)</div>
+                    <div class="detail-stat-label">HOURS TO READ</div>
                 </div>
             </div>
             
             <div style="margin-top: 16px;">
-                <h3 style="margin: 0 0 10px 0; color: #fff; font-size: 16px; border-left: 3px solid #667eea; padding-left: 8px;">Description</h3>
+                <h3 style="margin: 0 0 10px 0; color: #fff;">Description</h3>
                 <div class="description-scroll">
-                    ${formatText(escapeHtml(desc))}
+                    ${desc}
                 </div>
             </div>
             
             <div class="favorite-action-section">
-                <button class="${favoriteButtonClass}" onclick="triggerFavoriteAction('${currentBookId}', '${favoriteAction}')">
-                    ${favoriteButtonText}
+                <button class="${buttonClass}" onclick="triggerFavoriteAction('${currentBookId}', '${action}')">
+                    ${buttonText}
                 </button>
+                <p style="color: #888; font-size: 12px; margin-top: 8px;">
+                    This will try to find and click the corresponding favorite button above
+                </p>
             </div>
         `;
         
@@ -485,27 +479,30 @@ with gr.Blocks(css="""
         document.body.style.overflow = 'hidden';
     });
 
+    // Store book data for JavaScript access
+    window.booksData = [];
+    """ + f"""
+    // Add book data for the first 6 books
+    {''.join([f"window.booksData.push({{id: '{df.iloc[i]['id']}', title: '{df.iloc[i]['title']}'}});" for i in range(min(6, len(df)))])}
+    """ + """
+    
     function closePopup() {
         overlay.style.display = 'none';
         container.style.display = 'none';
         document.body.style.overflow = 'auto';
-        window.scrollTo(0, originalScrollPosition);
     }
 
     closeBtn.addEventListener('click', closePopup);
     overlay.addEventListener('click', closePopup);
 
     document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape') {
-            closePopup();
-        }
+        if (e.key === 'Escape') closePopup();
     });
 
     container.addEventListener('click', function(e) {
         e.stopPropagation();
     });
 
-    // Make function globally available
     window.triggerFavoriteAction = triggerFavoriteAction;
     </script>
     """)
