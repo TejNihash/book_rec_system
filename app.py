@@ -123,7 +123,7 @@ with gr.Blocks(css="""
 
 /* ---------- Description Scroll ---------- */
 .desc-scroll {
-    max-height: 150px;
+    max-height: 200px;
     overflow-y: auto;
     padding-right: 8px;
     margin-top: 6px;
