@@ -121,6 +121,34 @@ with gr.Blocks(css="""
 #detail-close:hover { color:#fff; }
 #detail-content { line-height:1.6; font-size:14px; color:#fff; }
 
+/* ---------- Description Scroll ---------- */
+.desc-scroll {
+    max-height: 150px;
+    overflow-y: auto;
+    padding-right: 8px;
+    margin-top: 6px;
+    color: #fff;
+    line-height: 1.4;
+}
+
+.desc-scroll::-webkit-scrollbar {
+    width: 6px;
+}
+
+.desc-scroll::-webkit-scrollbar-track {
+    background: #2a2a2a;
+    border-radius: 3px;
+}
+
+.desc-scroll::-webkit-scrollbar-thumb {
+    background: #555;
+    border-radius: 3px;
+}
+
+.desc-scroll::-webkit-scrollbar-thumb:hover {
+    background: #777;
+}
+
 /* ---------- Sidebar ---------- */
 .sidebar h2 { color:#fff; margin-bottom:12px; }
 .sidebar p { color:#999; }
@@ -401,7 +429,7 @@ document.addEventListener('click', e=>{
         <h2 style="margin:0 0 8px 0;color:#fff;">${escapeHtml(title)}</h2>
         <p style="margin:0 0 4px 0;color:#fff;"><strong>Author(s):</strong> ${escapeHtml(authors)}</p>
         <p style="margin:0 0 6px 0;color:#fff;"><strong>Genres:</strong> ${escapeHtml(genres)}</p>
-        <div style="margin-top:6px;color:#fff;">${escapeHtml(desc)}</div>
+        <div class="desc-scroll">${escapeHtml(desc)}</div>
       </div>
     </div>`;
 
