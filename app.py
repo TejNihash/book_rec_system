@@ -1,4 +1,3 @@
-alright, here is the code. don't mess up the logic that is working fine. like details pop up, fixed container for each section,add to fav buttons. just focus on what you can add from what I requested.
 
 import ast
 import pandas as pd
