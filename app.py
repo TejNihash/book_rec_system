@@ -36,6 +36,31 @@ def build_books_grid_html(books_df):
     cards_html = [create_book_card_html(book) for _, book in books_df.iterrows()]
     return f"<div class='books-grid'>{''.join(cards_html)}</div>"
 
+
+# ---------- Search Functions ----------
+def search_books(query):
+    if not query.strip():
+        return gr.update(), gr.update(visible=False)
+    
+    query = query.lower().strip()
+    # Search across all fields
+    title_mask = df['title'].str.lower().str.contains(query, na=False)
+    author_mask = df['authors'].apply(lambda authors: any(query in author.lower() for author in authors))
+    genre_mask = df['genres'].apply(lambda genres: any(query in genre.lower() for genre in genres))
+    desc_mask = df['description'].str.lower().str.contains(query, na=False)
+    
+    combined_mask = title_mask | author_mask | genre_mask | desc_mask
+    results = df[combined_mask]
+    
+    html = build_books_grid_html(results)
+    return html, gr.update(visible=True)
+
+def clear_search(random_loaded_state):
+    # Reset to random books
+    first_batch = random_loaded_state.head(BOOKS_PER_LOAD)
+    html = build_books_grid_html(first_batch)
+    return gr.update(value=""), html, gr.update(visible=False)
+
 # ---------- Gradio UI ----------
 with gr.Blocks(css="""
 /* ---------- App Layout ---------- */
@@ -84,10 +109,35 @@ with gr.Blocks(css="""
 .scroll-section::-webkit-scrollbar, .sidebar::-webkit-scrollbar { width:8px; }
 .scroll-section::-webkit-scrollbar-thumb, .sidebar::-webkit-scrollbar-thumb { background:#3a3a3a; border-radius:4px; }
 .scroll-section::-webkit-scrollbar-thumb:hover, .sidebar::-webkit-scrollbar-thumb:hover { background:#555; }
+
+/* ---------- Search Section ---------- */
+.search-section { background:#1b1b1e; border-radius:8px; padding:16px; margin-bottom:20px; border:1px solid #2d2d2d; }
+.search-row { display:flex; gap:10px; align-items:end; }
+.search-input { flex:1; }
+.search-btn { background:#667eea; color:white; border:none; border-radius:6px; padding:12px 24px; cursor:pointer; font-weight:bold; }
+.search-btn:hover { background:#5a6fd8; }
+.clear-search { background:#555; color:white; border:none; border-radius:6px; padding:8px 16px; cursor:pointer; margin-top:8px; }
+.clear-search:hover { background:#666; }
 """) as demo:
+
 
     with gr.Column(elem_classes="main-content"):
         gr.Markdown("# 📚 Dark Library Explorer")
+        
+        # ---------- ADD THIS SEARCH SECTION ----------
+        with gr.Column(elem_classes="search-section"):
+            gr.Markdown("### 🔍 Search Books")
+            with gr.Row(elem_classes="search-row"):
+                search_input = gr.Textbox(
+                    placeholder="Search by title, author, genre, or description...",
+                    show_label=False,
+                    elem_classes="search-input"
+                )
+                search_btn = gr.Button("Search", elem_classes="search-btn")
+            
+            clear_search_btn = gr.Button("Clear Search", elem_classes="clear-search", visible=False)
+        # ---------- END OF SEARCH SECTION ----------
+    
     
         gr.Markdown("🎲 Random Books", elem_classes="section-header")
         random_loaded_state = gr.State(df.sample(frac=1).reset_index(drop=True))
@@ -136,6 +186,26 @@ with gr.Blocks(css="""
                 load_more,
                 [popular_loaded_state, popular_display_state, popular_page_state],
                 [popular_display_state, popular_container, popular_page_state, popular_load_btn]
+            )
+
+            # ---------- Search Logic ----------
+            search_btn.click(
+                search_books,
+                [search_input],
+                [random_container, clear_search_btn]
+            )
+            
+            # Enter key to search
+            search_input.submit(
+                search_books,
+                [search_input],
+                [random_container, clear_search_btn]
+            )
+            
+            clear_search_btn.click(
+                clear_search,
+                [random_loaded_state],
+                [search_input, random_container, clear_search_btn]
             )
     
             # ---------- Initial Load ----------
