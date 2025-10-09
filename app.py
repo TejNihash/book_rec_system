@@ -44,7 +44,7 @@ with gr.Blocks(css="""
 .sidebar { width:300px; background:#141416; border-left:1px solid #2a2a2a; padding:16px; box-sizing:border-box; overflow-y:auto; position:fixed; right:0; top:0; bottom:0; color:#f0f0f0; }
 
 /* ---------- Fixed Scroll Sections ---------- */
-.scroll-section { max-height: 500px; overflow-y: auto; border-radius: 8px; padding: 12px; margin-bottom: 20px; background:#1b1b1e; }
+.scroll-section { max-height: 700px; overflow-y: auto; border-radius: 8px; padding: 12px; margin-bottom: 20px; background:#1b1b1e; }
 .section-header { font-size:20px; font-weight:bold; margin-bottom:12px; color:#fff; border-bottom:2px solid #667eea; padding-bottom:6px; }
 
 /* ---------- Books Grid ---------- */
