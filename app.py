@@ -47,7 +47,11 @@ with gr.Blocks(css="""
 .section-header { font-size:20px; font-weight:bold; margin-bottom:12px; color:#fff; border-bottom:2px solid #667eea; padding-bottom:6px; }
 
 /* ---------- Books Grid ---------- */
-.books-grid { display:grid; grid-template-columns: repeat(auto-fill,minmax(150px,1fr)); gap:16px; }
+.books-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr); /* 6 columns per row */
+    gap: 16px;
+}
 .book-card { background:#1b1b1e; border-radius:8px; padding:8px; box-shadow:0 0 10px rgba(255,255,255,0.05); cursor:pointer; text-align:center; transition:all 0.25s ease; position:relative; border:1px solid #2d2d2d; }
 .book-card:hover { transform:translateY(-4px); box-shadow:0 0 18px rgba(120,180,255,0.35); }
 .book-card img { width:100%; height:180px; object-fit:cover; border-radius:6px; margin-bottom:8px; }
