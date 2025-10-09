@@ -86,33 +86,29 @@ with gr.Blocks(css="""
 .scroll-section::-webkit-scrollbar-thumb:hover, .sidebar::-webkit-scrollbar-thumb:hover { background:#555; }
 """) as demo:
 
-    with gr.Row(elem_classes="app-container"):
-        with gr.Column(elem_classes="main-content"):
-            gr.Markdown("# 📚 Dark Library Explorer")
+    with gr.Column(elem_classes="main-content"):
+        gr.Markdown("# 📚 Dark Library Explorer")
     
-            # ---------- Random Books Section ----------
-            gr.Markdown("🎲 Random Books", elem_classes="section-header")
-            random_loaded_state = gr.State(df.sample(frac=1).reset_index(drop=True))
-            random_display_state = gr.State(pd.DataFrame())
-            random_page_state = gr.State(0)
+        gr.Markdown("🎲 Random Books", elem_classes="section-header")
+        random_loaded_state = gr.State(df.sample(frac=1).reset_index(drop=True))
+        random_display_state = gr.State(pd.DataFrame())
+        random_page_state = gr.State(0)
     
-            # Scrollable container for books
-            with gr.Column(elem_classes="scroll-section"):
-                random_container = gr.HTML()
-    
-            # Load More button outside scroll section
+        # Scroll section as flex container
+        with gr.Column(elem_classes="scroll-section"):
+            random_container = gr.HTML()
             random_load_btn = gr.Button("📘 Load More Random Books", elem_classes="load-more-btn")
     
-            # ---------- Popular Books Section ----------
-            gr.Markdown("🌟 Popular Books", elem_classes="section-header")
-            popular_loaded_state = gr.State(df.head(len(df)))
-            popular_display_state = gr.State(pd.DataFrame())
-            popular_page_state = gr.State(0)
-
-            # Scrollable container for books
-            with gr.Column(elem_classes="scroll-section"):
-                popular_container = gr.HTML()
+        gr.Markdown("🌟 Popular Books", elem_classes="section-header")
+        popular_loaded_state = gr.State(df.head(len(df)))
+        popular_display_state = gr.State(pd.DataFrame())
+        popular_page_state = gr.State(0)
     
+        with gr.Column(elem_classes="scroll-section"):
+            popular_container = gr.HTML()
+            popular_load_btn = gr.Button("📖 Load More Popular Books", elem_classes="load-more-btn")
+    
+        
             # Load More button outside scroll section
             popular_load_btn = gr.Button("📖 Load More Popular Books", elem_classes="load-more-btn")
     
