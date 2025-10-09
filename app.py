@@ -9,7 +9,7 @@ if "id" not in df.columns:
 df["authors"] = df["authors"].apply(lambda x: ast.literal_eval(x) if isinstance(x, str) else x)
 df["genres"] = df["genres"].apply(lambda x: ast.literal_eval(x) if isinstance(x, str) else x)
 
-BOOKS_PER_LOAD = 12  # 2 rows × 6 columns
+BOOKS_PER_LOAD = 12
 
 # ---------- Helpers ----------
 def create_book_card_html(book):
@@ -21,12 +21,11 @@ def create_book_card_html(book):
          data-genres="{', '.join(book['genres'])}" 
          data-img="{book['image_url']}" 
          data-desc="{book.get('description','No description available.')}">
-        <img src="{book['image_url']}" onerror="this.src='https://via.placeholder.com/120x180/667eea/white?text=No+Image'">
-        <div class='book-info'>
-            <div class='book-title'>{book['title']}</div>
-            <div class='book-authors'>by {', '.join(book['authors'])}</div>
-        </div>
-        <button class='fav-btn' title='Add to Favorites'>❤️</button>
+        <img src="{book['image_url']}" 
+             onerror="this.src='https://via.placeholder.com/120x180/667eea/white?text=No+Image'">
+        <div class='book-title'>{book['title']}</div>
+        <div class='book-authors'>by {', '.join(book['authors'])}</div>
+        <button class='fav-btn' title='Add to Favorites'>Add to Fav</button>
     </div>
     """
 
@@ -38,321 +37,109 @@ def build_books_grid_html(books_df):
 
 # ---------- Gradio UI ----------
 with gr.Blocks(css="""
+/* ---------- Layout ---------- */
 .app-container { 
-    display: flex; 
-    height: 100vh; 
-    overflow: hidden; 
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    display:flex; height:100vh; overflow:hidden; 
+    font-family:'Inter','Segoe UI',sans-serif; 
+    background:#0e0e10; color:#eaeaea;
 }
-.main-content { 
-    flex-grow: 1; 
-    overflow-y: auto; 
-    padding: 20px; 
-    max-width: calc(100% - 350px);
-    background: rgba(255, 255, 255, 0.95);
-    margin: 10px;
-    border-radius: 12px;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.1);
-}
-.sidebar { 
-    width: 320px; 
-    background: linear-gradient(180deg, #2c3e50 0%, #3498db 100%);
-    border-left: 1px solid rgba(255,255,255,0.1); 
-    padding: 20px; 
-    box-sizing: border-box;
-    overflow-y: auto; 
-    position: fixed; 
-    right: 0; 
-    top: 0; 
-    bottom: 0; 
-    color: white;
-}
-.section-container {
-    background: white;
-    border-radius: 12px;
-    padding: 20px;
-    margin-bottom: 25px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
-    border: 1px solid rgba(0,0,0,0.05);
-}
-.section-header {
-    font-size: 24px;
-    font-weight: 700;
-    color: #2c3e50;
-    margin-bottom: 15px;
-    padding-bottom: 10px;
-    border-bottom: 2px solid #3498db;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-.scroll-container {
-    max-height: 500px;
-    overflow-y: auto;
-    padding: 15px;
-    background: #f8f9fa;
-    border-radius: 8px;
-    border: 1px solid #e9ecef;
-    margin-bottom: 15px;
-}
-.books-grid { 
-    display: grid; 
-    grid-template-columns: repeat(6, 1fr); 
-    gap: 16px;
-    padding: 5px;
-}
+.main-content { flex-grow:1; overflow-y:auto; padding:16px; max-width:calc(100% - 320px); }
+.sidebar { width:300px; background:#141416; border-left:1px solid #2a2a2a; padding:16px; 
+           box-sizing:border-box; overflow-y:auto; position:fixed; right:0; top:0; bottom:0; color:#f0f0f0; }
+.books-grid { display:grid; grid-template-columns: repeat(auto-fill,minmax(150px,1fr)); gap:16px; }
+
+/* ---------- Cards ---------- */
 .book-card { 
-    background: white; 
-    border-radius: 10px; 
-    padding: 12px; 
-    box-shadow: 0 3px 15px rgba(0,0,0,0.1);
-    cursor: pointer; 
-    text-align: center; 
-    transition: all 0.3s ease; 
-    position: relative;
-    border: 1px solid #e9ecef;
-    display: flex;
-    flex-direction: column;
-    height: fit-content;
+    background:#1b1b1e; border-radius:8px; padding:8px; 
+    box-shadow:0 0 10px rgba(255,255,255,0.05); 
+    cursor:pointer; text-align:center; transition:all 0.25s ease; 
+    position:relative; border:1px solid #2d2d2d;
 }
-.book-card:hover { 
-    transform: translateY(-5px); 
-    box-shadow: 0 8px 25px rgba(0,0,0,0.15);
-}
-.book-card img { 
-    width: 100%; 
-    height: 160px; 
-    object-fit: cover; 
-    border-radius: 6px; 
-    margin-bottom: 10px;
-    border: 1px solid #e9ecef;
-}
-.book-info {
-    flex-grow: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-}
-.book-title { 
-    font-size: 13px; 
-    font-weight: 600; 
-    color: #2c3e50; 
-    overflow: hidden; 
-    display: -webkit-box; 
-    -webkit-line-clamp: 2; 
-    -webkit-box-orient: vertical;
-    line-height: 1.3;
-}
-.book-authors { 
-    font-size: 11px; 
-    color: #7f8c8d; 
-    overflow: hidden; 
-    display: -webkit-box; 
-    -webkit-line-clamp: 1; 
-    -webkit-box-orient: vertical;
-    font-weight: 500;
-}
-.fav-btn { 
-    font-size: 14px; 
-    margin-top: 8px; 
-    padding: 6px 12px; 
-    border: none; 
-    border-radius: 6px; 
-    cursor: pointer; 
-    background: #ecf0f1; 
-    transition: 0.3s; 
-    width: 100%;
-}
-.fav-btn:hover {
-    background: #e74c3c;
-    color: white;
-}
-.fav-btn.fav-active { 
-    background: #e74c3c; 
-    color: white;
-}
-.load-more-btn {
-    background: linear-gradient(135deg, #3498db, #2980b9);
-    color: white;
-    border: none;
-    padding: 12px 24px;
-    border-radius: 8px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    width: 100%;
-    margin-top: 10px;
-}
-.load-more-btn:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(52, 152, 219, 0.4);
-}
-.load-more-btn:disabled {
-    background: #bdc3c7;
-    cursor: not-allowed;
-    transform: none;
-    box-shadow: none;
-}
-.sidebar-book {
-    display: flex;
-    align-items: center;
-    padding: 10px;
-    margin-bottom: 8px;
-    background: rgba(255,255,255,0.1);
-    border-radius: 6px;
-    transition: 0.3s;
-}
-.sidebar-book:hover {
-    background: rgba(255,255,255,0.2);
-}
+.book-card:hover { transform:translateY(-4px); box-shadow:0 0 18px rgba(120,180,255,0.35); }
+.book-card img { width:100%; height:180px; object-fit:cover; border-radius:6px; margin-bottom:8px; }
+.book-title { font-size:13px; font-weight:600; color:#fff; -webkit-line-clamp:2; display:-webkit-box; -webkit-box-orient:vertical; overflow:hidden; }
+.book-authors { font-size:11px; color:#9ba1b0; -webkit-line-clamp:1; display:-webkit-box; -webkit-box-orient:vertical; overflow:hidden; }
+
+/* ---------- Buttons ---------- */
+.fav-btn { font-size:11px; margin-top:6px; padding:4px 8px; border:none; border-radius:4px; cursor:pointer; 
+           background:linear-gradient(90deg,#3a3f47,#4f5460); color:#fff; transition:all 0.25s ease; }
+.fav-btn:hover { background:linear-gradient(90deg,#5a60ff,#3b8dff); }
+.fav-btn.fav-active { background:linear-gradient(90deg,#ffb800,#ff8800); color:#000; }
+
+/* ---------- No Books ---------- */
+.no-books { text-align:center; color:#aaa; margin-top:20px; }
+
+/* ---------- Overlay ---------- */
 #detail-overlay { 
-    display: none; 
-    position: fixed; 
-    top: 0; 
-    left: 0; 
-    width: 100%; 
-    height: 100%; 
-    background: rgba(0,0,0,0.7); 
-    z-index: 1000; 
-    backdrop-filter: blur(5px);
+    display:none; position:fixed; top:0; left:0; width:100%; height:100%; 
+    background:rgba(0,0,0,0.8); z-index:1000; backdrop-filter:blur(6px);
 }
 #detail-box { 
-    position: absolute; 
-    background: white; 
-    border-radius: 12px; 
-    padding: 24px; 
-    max-width: 600px; 
-    box-shadow: 0 20px 60px rgba(0,0,0,0.3); 
-    color: #2c3e50;
-    border: 1px solid rgba(255,255,255,0.2);
+    position:absolute; background:#1b1b1e; border-radius:10px; padding:20px; 
+    max-width:520px; box-shadow:0 8px 25px rgba(0,0,0,0.6); 
+    color:#fff; border:1px solid #2a2a2a;
 }
-#detail-close { 
-    position: absolute; 
-    top: 12px; 
-    right: 16px; 
-    cursor: pointer; 
-    font-size: 24px; 
-    font-weight: bold; 
-    color: #7f8c8d;
-    transition: 0.3s;
-}
-#detail-close:hover {
-    color: #e74c3c;
-}
-#detail-content { 
-    line-height: 1.6; 
-    font-size: 14px; 
-    color: #2c3e50;
-}
-.no-books {
-    text-align: center;
-    color: #7f8c8d;
-    font-style: italic;
-    padding: 40px;
-    font-size: 16px;
-}
-.scroll-container::-webkit-scrollbar {
-    width: 6px;
-}
-.scroll-container::-webkit-scrollbar-track {
-    background: #f1f1f1;
-    border-radius: 3px;
-}
-.scroll-container::-webkit-scrollbar-thumb {
-    background: #c1c1c1;
-    border-radius: 3px;
-}
-.scroll-container::-webkit-scrollbar-thumb:hover {
-    background: #a8a8a8;
-}
+#detail-close { position:absolute; top:8px; right:12px; cursor:pointer; font-size:20px; font-weight:bold; color:#ccc; }
+#detail-close:hover { color:#fff; }
+#detail-content { line-height:1.6; font-size:14px; color:#fff; }
+
+/* ---------- Sidebar ---------- */
+.sidebar h2 { color:#fff; margin-bottom:12px; }
+.sidebar p { color:#999; }
+.sidebar-book { display:flex; align-items:center; gap:6px; margin-bottom:10px; }
+.sidebar-book:hover { background:#222; border-radius:6px; padding:4px; transition:0.2s; }
+
+/* ---------- Scrollbar ---------- */
+::-webkit-scrollbar { width:8px; }
+::-webkit-scrollbar-thumb { background:#3a3a3a; border-radius:4px; }
+::-webkit-scrollbar-thumb:hover { background:#555; }
 """) as demo:
 
     with gr.Row(elem_classes="app-container"):
         with gr.Column(elem_classes="main-content"):
-            gr.Markdown("# 📚 Book Explorer", elem_classes="main-title")
-            
-            # ---------- Random Books Section ----------
-            with gr.Column(elem_classes="section-container"):
-                gr.Markdown("🎲 Random Books", elem_classes="section-header")
-                
-                random_loaded_state = gr.State(df.sample(frac=1).reset_index(drop=True))
-                random_display_state = gr.State(pd.DataFrame())
-                random_page_state = gr.State(0)
-                
-                with gr.Column(elem_classes="scroll-container"):
-                    random_container = gr.HTML()
-                
-                random_load_btn = gr.Button("📚 Load More Random Books", elem_classes="load-more-btn")
+            gr.Markdown("# 📚 Dark Library Explorer")
 
-            # ---------- Popular Books Section ----------
-            with gr.Column(elem_classes="section-container"):
-                gr.Markdown("🔥 Popular Books", elem_classes="section-header")
-                
-                popular_loaded_state = gr.State(df.head(len(df)))
-                popular_display_state = gr.State(pd.DataFrame())
-                popular_page_state = gr.State(0)
-                
-                with gr.Column(elem_classes="scroll-container"):
-                    popular_container = gr.HTML()
-                
-                popular_load_btn = gr.Button("📚 Load More Popular Books", elem_classes="load-more-btn")
+            gr.Markdown("### 🎲 Random Books")
+            random_loaded_state = gr.State(df.sample(frac=1).reset_index(drop=True))
+            random_display_state = gr.State(pd.DataFrame())
+            random_page_state = gr.State(0)
+            random_container = gr.HTML()
+            random_load_btn = gr.Button("📘 Load More Random Books")
 
-            # ---------- Load more logic ----------
+            gr.Markdown("### 🌟 Popular Books")
+            popular_loaded_state = gr.State(df.head(len(df)))
+            popular_display_state = gr.State(pd.DataFrame())
+            popular_page_state = gr.State(0)
+            popular_container = gr.HTML()
+            popular_load_btn = gr.Button("📖 Load More Popular Books")
+
+            # ---------- Load Logic ----------
             def load_more(loaded_books, display_books, page_idx):
                 start = page_idx * BOOKS_PER_LOAD
                 end = start + BOOKS_PER_LOAD
                 new_books = loaded_books.iloc[start:end]
-                
-                if display_books is None or display_books.empty:
-                    display_books = pd.DataFrame()
-                
                 if new_books.empty:
-                    # No more books to load
-                    combined = display_books
-                    html = build_books_grid_html(combined)
-                    return combined, gr.update(value=html), page_idx, gr.update(visible=False)
-                
+                    return display_books, gr.update(visible=False), page_idx
                 combined = pd.concat([display_books, new_books], ignore_index=True)
                 html = build_books_grid_html(combined)
-                
-                # Check if there are more books to load
-                has_more = end < len(loaded_books)
-                return combined, gr.update(value=html), page_idx + 1, gr.update(visible=has_more)
+                return combined, gr.update(value=html), page_idx + 1
 
-            random_load_btn.click(
-                load_more,
-                [random_loaded_state, random_display_state, random_page_state],
-                [random_display_state, random_container, random_page_state, random_load_btn]
-            )
-            
-            popular_load_btn.click(
-                load_more,
-                [popular_loaded_state, popular_display_state, popular_page_state],
-                [popular_display_state, popular_container, popular_page_state, popular_load_btn]
-            )
+            random_load_btn.click(load_more, [random_loaded_state, random_display_state, random_page_state],
+                                  [random_display_state, random_container, random_page_state])
+            popular_load_btn.click(load_more, [popular_loaded_state, popular_display_state, popular_page_state],
+                                   [popular_display_state, popular_container, popular_page_state])
 
-            # ---------- Initial load ----------
             def initial_load(loaded_books):
                 return load_more(loaded_books, pd.DataFrame(), 0)
 
-            # Set initial values
-            demo.load(
-                lambda: [
-                    *initial_load(random_loaded_state.value),
-                    *initial_load(popular_loaded_state.value)
-                ],
-                outputs=[
-                    random_display_state, random_container, random_page_state, random_load_btn,
-                    popular_display_state, popular_container, popular_page_state, popular_load_btn
-                ]
-            )
+            random_display_state.value, random_container.value, random_page_state.value = initial_load(random_loaded_state.value)
+            popular_display_state.value, popular_container.value, popular_page_state.value = initial_load(popular_loaded_state.value)
 
         with gr.Column(elem_classes="sidebar"):
             gr.Markdown("## ⭐ Favorites")
-            favorites_container = gr.HTML("<p style='color: rgba(255,255,255,0.8);'>No favorites yet. Click the ❤️ button on books to add them here.</p>")
+            favorites_container = gr.HTML("<p>No favorites yet.</p>")
 
-    # ---------- Detail popup + Fav JS ----------
+    # ---------- JS ----------
     gr.HTML("""
 <div id="detail-overlay">
   <div id="detail-box">
@@ -367,114 +154,86 @@ const closeBtn = document.getElementById('detail-close');
 const favorites = new Map();
 
 function escapeHtml(str){
-    return str ? String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;')
-                     .replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;') : "";
+  return str ? String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;')
+                   .replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;') : "";
 }
 
 function updateFavoritesSidebar(){
-    const sidebarContent = document.querySelector('.sidebar > div');
-    if(!sidebarContent) return;
-    if(favorites.size===0){
-        sidebarContent.innerHTML = "<p style='color: rgba(255,255,255,0.8);'>No favorites yet. Click the ❤️ button on books to add them here.</p>";
-        return;
-    }
-    let html = "<div style='display: flex; flex-direction: column; gap: 8px;'>";
-    favorites.forEach((book,id)=>{
-        html += `<div class="sidebar-book" data-id="${id}">
-            <img src="${escapeHtml(book.img)}" style="width:40px;height:55px;object-fit:cover;border-radius:4px;margin-right:10px;">
-            <div style="font-size:12px; flex: 1;">
-                <strong style="color: white;">${escapeHtml(book.title)}</strong><br>
-                <span style="color: rgba(255,255,255,0.8);">${escapeHtml(book.authors)}</span>
-            </div>
-        </div>`;
-    });
-    html += "</div>";
-    sidebarContent.innerHTML = html;
+  const sidebarContent = document.querySelector('.sidebar > div');
+  if(!sidebarContent) return;
+  if(favorites.size === 0){
+    sidebarContent.innerHTML = "<p>No favorites yet.</p>";
+    return;
+  }
+  let html = "";
+  favorites.forEach((book,id)=>{
+    html += `<div class="sidebar-book" data-id="${id}">
+      <img src="${escapeHtml(book.img)}" 
+           style="width:40px;height:56px;object-fit:cover;border-radius:4px;">
+      <div style="font-size:12px;color:#fff;">
+        <strong>${escapeHtml(book.title)}</strong><br>
+        <span style="color:#aaa;">${escapeHtml(book.authors)}</span>
+      </div>
+    </div>`;
+  });
+  sidebarContent.innerHTML = html;
 }
 
 document.addEventListener('click', e=>{
-    const favBtn = e.target.closest('.fav-btn');
-    if(favBtn){
-        e.stopPropagation();
-        const card = favBtn.closest('.book-card');
-        const bookId = card.dataset.id;
-        const title = card.dataset.title;
-        const authors = card.dataset.authors;
-        const img = card.dataset.img;
-        if(favorites.has(bookId)){
-            favorites.delete(bookId);
-            favBtn.classList.remove('fav-active');
-            favBtn.innerHTML = '❤️';
-        }else{
-            favorites.set(bookId,{title,authors,img});
-            favBtn.classList.add('fav-active');
-            favBtn.innerHTML = '❤️ Added';
-        }
-        updateFavoritesSidebar();
-        return;
-    }
-
-    const card = e.target.closest('.book-card');
-    if(!card) return;
+  const favBtn = e.target.closest('.fav-btn');
+  if(favBtn){
+    e.stopPropagation();
+    const card = favBtn.closest('.book-card');
+    const bookId = card.dataset.id;
     const title = card.dataset.title;
     const authors = card.dataset.authors;
-    const genres = card.dataset.genres;
-    const desc = card.dataset.desc;
     const img = card.dataset.img;
-
-    document.getElementById('detail-content').innerHTML = `
-        <div style="display:flex;gap:20px;align-items:flex-start;">
-            <img src="${img}" style="width:180px;height:auto;border-radius:8px;object-fit:cover;box-shadow:0 4px 12px rgba(0,0,0,0.2);">
-            <div style="flex:1;">
-                <h2 style="margin:0 0 12px 0;color:#2c3e50;font-size:20px;line-height:1.3;">${escapeHtml(title)}</h2>
-                <p style="margin:0 0 8px 0;color:#34495e;"><strong>Author(s):</strong> ${escapeHtml(authors)}</p>
-                <p style="margin:0 0 12px 0;color:#34495e;"><strong>Genres:</strong> ${escapeHtml(genres)}</p>
-                <div style="margin-top:12px;color:#2c3e50;line-height:1.6;max-height:200px;overflow-y:auto;padding-right:10px;">${escapeHtml(desc)}</div>
-            </div>
-        </div>
-    `;
-
-    // Center the detail box
-    box.style.left = '50%';
-    box.style.top = '50%';
-    box.style.transform = 'translate(-50%, -50%)';
-
-    overlay.style.display='block';
-});
-
-closeBtn.addEventListener('click',()=>{
-    overlay.style.display='none';
-    box.style.transform = 'translate(-50%, -50%)';
-});
-overlay.addEventListener('click',e=>{
-    if(e.target===overlay) {
-        overlay.style.display='none';
-        box.style.transform = 'translate(-50%, -50%)';
+    if(favorites.has(bookId)){
+      favorites.delete(bookId);
+      favBtn.classList.remove('fav-active');
+    } else {
+      favorites.set(bookId,{title,authors,img});
+      favBtn.classList.add('fav-active');
     }
-});
-document.addEventListener('keydown',e=>{
-    if(e.key==='Escape') {
-        overlay.style.display='none';
-        box.style.transform = 'translate(-50%, -50%)';
-    }
+    updateFavoritesSidebar();
+    return;
+  }
+
+  const card = e.target.closest('.book-card');
+  if(!card) return;
+  const title = card.dataset.title;
+  const authors = card.dataset.authors;
+  const genres = card.dataset.genres;
+  const desc = card.dataset.desc;
+  const img = card.dataset.img;
+
+  document.getElementById('detail-content').innerHTML = `
+    <div style="display:flex;gap:16px;align-items:flex-start;color:#fff;">
+      <img src="${img}" style="width:200px;height:auto;border-radius:6px;object-fit:cover;">
+      <div style="max-width:260px;">
+        <h2 style="margin:0 0 8px 0;color:#fff;">${escapeHtml(title)}</h2>
+        <p style="margin:0 0 4px 0;color:#fff;"><strong>Author(s):</strong> ${escapeHtml(authors)}</p>
+        <p style="margin:0 0 6px 0;color:#fff;"><strong>Genres:</strong> ${escapeHtml(genres)}</p>
+        <div style="margin-top:6px;color:#fff;">${escapeHtml(desc)}</div>
+      </div>
+    </div>
+  `;
+
+  const rect = card.getBoundingClientRect();
+  let left = rect.right + 10;
+  let top = rect.top;
+  if(left + box.offsetWidth > window.innerWidth - 20){ left = rect.left - box.offsetWidth - 10; }
+  if(top + box.offsetHeight > window.innerHeight - 20){ top = window.innerHeight - box.offsetHeight - 20; }
+  box.style.left = `${Math.max(left, 10)}px`;
+  box.style.top = `${Math.max(top, 10)}px`;
+
+  overlay.style.display='block';
+  box.scrollIntoView({ behavior: "smooth", block: "nearest" });
 });
 
-// Initialize favorite buttons on existing cards
-function initializeFavButtons() {
-    document.querySelectorAll('.book-card').forEach(card => {
-        const favBtn = card.querySelector('.fav-btn');
-        const bookId = card.dataset.id;
-        if (favorites.has(bookId)) {
-            favBtn.classList.add('fav-active');
-            favBtn.innerHTML = '❤️ Added';
-        }
-    });
-}
-
-// Reinitialize when new content loads
-const observer = new MutationObserver(initializeFavButtons);
-observer.observe(document.body, { childList: true, subtree: true });
-initializeFavButtons();
+closeBtn.addEventListener('click',()=>{overlay.style.display='none';});
+overlay.addEventListener('click',e=>{if(e.target===overlay) overlay.style.display='none';});
+document.addEventListener('keydown',e=>{if(e.key==='Escape') overlay.style.display='none';});
 </script>
 """)
 
