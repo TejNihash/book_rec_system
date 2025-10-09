@@ -206,114 +206,116 @@ const closeBtn = document.getElementById('detail-close');
 const favorites = new Map();
 
 function escapeHtml(str){
-    return str ? String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;')
-                     .replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;') : "";
+  return str ? String(str)
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;')
+    .replace(/'/g,'&#39;') : "";
 }
 
+// ---------- Update Sidebar ----------
 function updateFavoritesSidebar(){
-    const sidebarContent = document.querySelector('.sidebar > div');
-    if(!sidebarContent) return;
-    if(favorites.size===0){
-        sidebarContent.innerHTML = "<p>No favorites yet.</p>";
-        return;
-    }
-    let html = "";
-    favorites.forEach((book,id)=>{
-        html += `<div class="sidebar-book" data-id="${id}">
-            <img src="${escapeHtml(book.img)}" style="width:36px;height:52px;object-fit:cover;border-radius:4px;margin-right:6px;">
-            <div style="font-size:12px;"><strong>${escapeHtml(book.title)}</strong><br>${escapeHtml(book.authors)}</div>
-        </div>`;
-    });
-    sidebarContent.innerHTML = html;
+  const sidebarList = document.getElementById('favorites-list');
+  if(!sidebarList) return;
+
+  if(favorites.size === 0){
+    sidebarList.innerHTML = "<p>No favorites yet.</p>";
+    return;
+  }
+
+  let html = "";
+  favorites.forEach((book,id)=>{
+    html += `
+      <div class="sidebar-book" data-id="${id}">
+        <img src="${escapeHtml(book.img)}" 
+             style="width:40px;height:56px;object-fit:cover;border-radius:4px;">
+        <div style="flex:1;font-size:12px;color:#fff;">
+          <strong>${escapeHtml(book.title)}</strong><br>
+          <span style="color:#aaa;">${escapeHtml(book.authors)}</span>
+        </div>
+        <button class="remove-fav-btn" title="Remove from Favorites"
+          style="background:none;border:none;color:#888;cursor:pointer;font-size:14px;">
+          🗑️
+        </button>
+      </div>`;
+  });
+  sidebarList.innerHTML = html;
 }
 
+// ---------- Click Handler ----------
 document.addEventListener('click', e=>{
-    const favBtn = e.target.closest('.fav-btn');
-    if(favBtn){
-        e.stopPropagation();
-        const card = favBtn.closest('.book-card');
-        const bookId = card.dataset.id;
-        const title = card.dataset.title;
-        const authors = card.dataset.authors;
-        const img = card.dataset.img;
-        if(favorites.has(bookId)){
-            favorites.delete(bookId);
-            favBtn.classList.remove('fav-active');
-            favBtn.textContent = 'Add to Fav';
-        }else{
-            favorites.set(bookId,{title,authors,img});
-            favBtn.classList.add('fav-active');
-            favBtn.textContent = 'Added to Fav';
-        }
-        updateFavoritesSidebar();
-        return;
-    }
+  // --- Remove Favorite from Sidebar ---
+  if(e.target.closest('.remove-fav-btn')){
+    const parent = e.target.closest('.sidebar-book');
+    if(!parent) return;
+    const id = parent.dataset.id;
+    favorites.delete(id);
+    updateFavoritesSidebar();
+    // also un-highlight the corresponding book card
+    const cardBtn = document.querySelector(`.book-card[data-id="${id}"] .fav-btn`);
+    if(cardBtn) cardBtn.classList.remove('fav-active');
+    return;
+  }
 
-    const card = e.target.closest('.book-card');
-    if(!card) return;
+  // --- Toggle Favorite from Card ---
+  const favBtn = e.target.closest('.fav-btn');
+  if(favBtn){
+    e.stopPropagation();
+    const card = favBtn.closest('.book-card');
+    const bookId = card.dataset.id;
     const title = card.dataset.title;
     const authors = card.dataset.authors;
-    const genres = card.dataset.genres;
-    const desc = card.dataset.desc;
     const img = card.dataset.img;
-
-    document.getElementById('detail-content').innerHTML = `
-        <div style="display:flex;gap:16px;align-items:flex-start;">
-            <img src="${img}" style="width:220px;height:auto;border-radius:6px;object-fit:cover;">
-            <div style="max-width:240px;">
-                <h2 style="margin:0 0 8px 0;color:#222;">${escapeHtml(title)}</h2>
-                <p style="margin:0 0 4px 0;color:#222;"><strong>Author(s):</strong> ${escapeHtml(authors)}</p>
-                <p style="margin:0 0 6px 0;color:#222;"><strong>Genres:</strong> ${escapeHtml(genres)}</p>
-                <div style="margin-top:6px;color:#222;">${escapeHtml(desc)}</div>
-            </div>
-        </div>
-    `;
-
-    const rect = card.getBoundingClientRect();
-    let left = rect.right + 10;
-    let top = rect.top;
-
-    // Adjust horizontal overflow
-    if (left + box.offsetWidth > window.innerWidth - 20) {
-        left = rect.left - box.offsetWidth - 10;
+    if(favorites.has(bookId)){
+      favorites.delete(bookId);
+      favBtn.classList.remove('fav-active');
+    } else {
+      favorites.set(bookId,{title,authors,img});
+      favBtn.classList.add('fav-active');
     }
+    updateFavoritesSidebar();
+    return;
+  }
 
-    // Adjust vertical overflow
-    if (top + box.offsetHeight > window.innerHeight - 20) {
-        top = window.innerHeight - box.offsetHeight - 20;
-    }
+  // --- Book Detail Popup ---
+  const card = e.target.closest('.book-card');
+  if(!card) return;
+  const title = card.dataset.title;
+  const authors = card.dataset.authors;
+  const genres = card.dataset.genres;
+  const desc = card.dataset.desc;
+  const img = card.dataset.img;
 
-    box.style.left = `${Math.max(left, 10)}px`;
-    box.style.top = `${Math.max(top, 10)}px`;
+  document.getElementById('detail-content').innerHTML = `
+    <div style="display:flex;gap:16px;align-items:flex-start;color:#fff;">
+      <img src="${img}" style="width:200px;height:auto;border-radius:6px;object-fit:cover;">
+      <div style="max-width:260px;">
+        <h2 style="margin:0 0 8px 0;color:#fff;">${escapeHtml(title)}</h2>
+        <p style="margin:0 0 4px 0;color:#fff;"><strong>Author(s):</strong> ${escapeHtml(authors)}</p>
+        <p style="margin:0 0 6px 0;color:#fff;"><strong>Genres:</strong> ${escapeHtml(genres)}</p>
+        <div style="margin-top:6px;color:#fff;">${escapeHtml(desc)}</div>
+      </div>
+    </div>`;
 
-    overlay.style.display='block';
-    box.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  const rect = card.getBoundingClientRect();
+  let left = rect.right + 10;
+  let top = rect.top;
+  if(left + box.offsetWidth > window.innerWidth - 20){ left = rect.left - box.offsetWidth - 10; }
+  if(top + box.offsetHeight > window.innerHeight - 20){ top = window.innerHeight - box.offsetHeight - 20; }
+  box.style.left = `${Math.max(left, 10)}px`;
+  box.style.top = `${Math.max(top, 10)}px`;
+
+  overlay.style.display='block';
+  box.scrollIntoView({ behavior: "smooth", block: "nearest" });
 });
 
+// ---------- Overlay Controls ----------
 closeBtn.addEventListener('click',()=>{overlay.style.display='none';});
 overlay.addEventListener('click',e=>{if(e.target===overlay) overlay.style.display='none';});
 document.addEventListener('keydown',e=>{if(e.key==='Escape') overlay.style.display='none';});
-
-// Initialize favorite buttons state
-function initializeFavButtons() {
-    document.querySelectorAll('.book-card').forEach(card => {
-        const favBtn = card.querySelector('.fav-btn');
-        const bookId = card.dataset.id;
-        if (favorites.has(bookId)) {
-            favBtn.classList.add('fav-active');
-            favBtn.textContent = 'Added to Fav';
-        } else {
-            favBtn.classList.remove('fav-active');
-            favBtn.textContent = 'Add to Fav';
-        }
-    });
-}
-
-// Reinitialize when new content loads
-const observer = new MutationObserver(initializeFavButtons);
-observer.observe(document.body, { childList: true, subtree: true });
-initializeFavButtons();
 </script>
+
 """)
 
 demo.launch()
