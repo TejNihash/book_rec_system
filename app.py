@@ -1,3 +1,5 @@
+alright, here is the code. don't mess up the logic that is working fine. like details pop up, fixed container for each section,add to fav buttons. just focus on what you can add from what I requested.
+
 import ast
 import pandas as pd
 import gradio as gr
@@ -35,26 +37,6 @@ def build_books_grid_html(books_df):
     cards_html = [create_book_card_html(book) for _, book in books_df.iterrows()]
     return f"<div class='books-grid'>{''.join(cards_html)}</div>"
 
-# ---------- Search Function ----------
-def search_books(query, search_type):
-    if not query:
-        return gr.update(value=""), gr.update(visible=True), gr.update(visible=False)
-    
-    query = query.lower().strip()
-    results = pd.DataFrame()
-    
-    if search_type == "Title":
-        results = df[df['title'].str.lower().str.contains(query, na=False)]
-    elif search_type == "Author":
-        # Search in authors list
-        results = df[df['authors'].apply(lambda authors: any(query in author.lower() for author in authors))]
-    elif search_type == "Genre":
-        # Search in genres list
-        results = df[df['genres'].apply(lambda genres: any(query in genre.lower() for genre in genres))]
-    
-    html = build_books_grid_html(results)
-    return html, gr.update(visible=False), gr.update(visible=True)
-
 # ---------- Gradio UI ----------
 with gr.Blocks(css="""
 /* ---------- App Layout ---------- */
@@ -62,37 +44,9 @@ with gr.Blocks(css="""
 .main-content { flex-grow:1; overflow-y:auto; padding:16px; max-width:calc(100% - 320px); }
 .sidebar { width:300px; background:#141416; border-left:1px solid #2a2a2a; padding:16px; box-sizing:border-box; overflow-y:auto; position:fixed; right:0; top:0; bottom:0; color:#f0f0f0; }
 
-/* ---------- Search Section ---------- */
-.search-section { background:#1b1b1e; border-radius:8px; padding:16px; margin-bottom:20px; border:1px solid #2d2d2d; }
-.search-row { display:flex; gap:12px; align-items:end; margin-bottom:8px; }
-.search-input { flex:1; }
-.search-type { width:120px; }
-.search-btn { background:#667eea; color:white; border:none; border-radius:6px; padding:8px 16px; cursor:pointer; font-weight:bold; }
-.search-btn:hover { background:#5a6fd8; }
-.clear-search { background:#555; color:white; border:none; border-radius:6px; padding:8px 16px; cursor:pointer; margin-top:8px; }
-.clear-search:hover { background:#666; }
-
 /* ---------- Fixed Scroll Sections ---------- */
-.scroll-section { 
-    max-height: 500px; 
-    overflow-y: auto; 
-    border-radius: 8px; 
-    padding: 12px; 
-    margin-bottom: 20px; 
-    background:#1b1b1e; 
-    border:1px solid #2d2d2d;
-}
-.section-header { 
-    font-size:20px; 
-    font-weight:bold; 
-    margin-bottom:12px; 
-    color:#fff; 
-    border-bottom:2px solid #667eea; 
-    padding-bottom:6px; 
-    display:flex;
-    justify-content:space-between;
-    align-items:center;
-}
+.scroll-section { max-height: 500px; overflow-y: auto; border-radius: 8px; padding: 12px; margin-bottom: 20px; background:#1b1b1e; }
+.section-header { font-size:20px; font-weight:bold; margin-bottom:12px; color:#fff; border-bottom:2px solid #667eea; padding-bottom:6px; }
 
 /* ---------- Books Grid ---------- */
 .books-grid {
@@ -136,53 +90,32 @@ with gr.Blocks(css="""
     with gr.Row(elem_classes="app-container"):
         with gr.Column(elem_classes="main-content"):
             gr.Markdown("# 📚 Dark Library Explorer")
-            
-            # ---------- Search Section ----------
-            with gr.Column(elem_classes="search-section"):
-                gr.Markdown("### 🔍 Search Books")
-                with gr.Row(elem_classes="search-row"):
-                    search_input = gr.Textbox(
-                        placeholder="Enter title, author, or genre...",
-                        show_label=False,
-                        elem_classes="search-input"
-                    )
-                    search_type = gr.Dropdown(
-                        choices=["Title", "Author", "Genre"],
-                        value="Title",
-                        label="Search by",
-                        elem_classes="search-type"
-                    )
-                    search_btn = gr.Button("Search", elem_classes="search-btn")
-                
-                clear_search_btn = gr.Button("Clear Search", elem_classes="clear-search", visible=False)
     
             # ---------- Random Books Section ----------
-            with gr.Column():
-                gr.Markdown("🎲 Random Books", elem_classes="section-header")
-                random_loaded_state = gr.State(df.sample(frac=1).reset_index(drop=True))
-                random_display_state = gr.State(pd.DataFrame())
-                random_page_state = gr.State(0)
-        
-                # Scrollable container for books
-                with gr.Column(elem_classes="scroll-section"):
-                    random_container = gr.HTML()
-        
-                # Load More button outside scroll section
-                random_load_btn = gr.Button("📘 Load More Random Books", elem_classes="load-more-btn", visible=True)
+            gr.Markdown("🎲 Random Books", elem_classes="section-header")
+            random_loaded_state = gr.State(df.sample(frac=1).reset_index(drop=True))
+            random_display_state = gr.State(pd.DataFrame())
+            random_page_state = gr.State(0)
+    
+            # Scrollable container for books
+            with gr.Column(elem_classes="scroll-section"):
+                random_container = gr.HTML()
+    
+            # Load More button outside scroll section
+            random_load_btn = gr.Button("📘 Load More Random Books", elem_classes="load-more-btn")
     
             # ---------- Popular Books Section ----------
-            with gr.Column():
-                gr.Markdown("🌟 Popular Books", elem_classes="section-header")
-                popular_loaded_state = gr.State(df.head(len(df)))
-                popular_display_state = gr.State(pd.DataFrame())
-                popular_page_state = gr.State(0)
+            gr.Markdown("🌟 Popular Books", elem_classes="section-header")
+            popular_loaded_state = gr.State(df.head(len(df)))
+            popular_display_state = gr.State(pd.DataFrame())
+            popular_page_state = gr.State(0)
 
-                # Scrollable container for books
-                with gr.Column(elem_classes="scroll-section"):
-                    popular_container = gr.HTML()
-        
-                # Load More button outside scroll section
-                popular_load_btn = gr.Button("📖 Load More Popular Books", elem_classes="load-more-btn", visible=True)
+            # Scrollable container for books
+            with gr.Column(elem_classes="scroll-section"):
+                popular_container = gr.HTML()
+    
+            # Load More button outside scroll section
+            popular_load_btn = gr.Button("📖 Load More Popular Books", elem_classes="load-more-btn")
     
             # ---------- Load More Logic ----------
             def load_more(loaded_books, display_books, page_idx):
@@ -210,28 +143,6 @@ with gr.Blocks(css="""
                 [popular_loaded_state, popular_display_state, popular_page_state],
                 [popular_display_state, popular_container, popular_page_state, popular_load_btn]
             )
-            
-            # ---------- Search Logic ----------
-            def clear_search():
-                return (
-                    gr.update(value=""),  # Clear search input
-                    gr.update(visible=True),  # Show random books
-                    gr.update(visible=False),  # Hide clear button
-                    gr.update(value=build_books_grid_html(pd.DataFrame())),  # Clear search results
-                    gr.update(visible=True),  # Show load more buttons
-                    gr.update(visible=True)
-                )
-            
-            search_btn.click(
-                search_books,
-                [search_input, search_type],
-                [random_container, random_load_btn, clear_search_btn]
-            )
-            
-            clear_search_btn.click(
-                clear_search,
-                outputs=[search_input, random_load_btn, clear_search_btn, random_container, random_load_btn, popular_load_btn]
-            )
     
             # ---------- Initial Load ----------
             def initial_load(loaded_books):
@@ -247,6 +158,8 @@ with gr.Blocks(css="""
                     popular_display_state, popular_container, popular_page_state, popular_load_btn
                 ]
             )
+
+ 
 
         with gr.Column(elem_classes="sidebar"):
             gr.Markdown("## ⭐ Favorites")
