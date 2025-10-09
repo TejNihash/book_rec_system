@@ -137,11 +137,10 @@ with gr.Blocks(css="""
 
         with gr.Column(elem_classes="sidebar"):
             gr.Markdown("## ⭐ Favorites")
-            favorites_container = gr.HTML("<p>No favorites yet.</p>")
+            favorites_container = gr.HTML("<div id='favorites-list'><p>No favorites yet.</p></div>")
 
     # ---------- JS ----------
-    gr.HTML("""
-<div id="detail-overlay">
+    gr.HTML("""<div id="detail-overlay">
   <div id="detail-box">
     <span id="detail-close">&times;</span>
     <div id="detail-content"></div>
@@ -159,24 +158,25 @@ function escapeHtml(str){
 }
 
 function updateFavoritesSidebar(){
-  const sidebarContent = document.querySelector('.sidebar > div');
-  if(!sidebarContent) return;
+  const sidebarList = document.getElementById('favorites-list');
+  if(!sidebarList) return;
   if(favorites.size === 0){
-    sidebarContent.innerHTML = "<p>No favorites yet.</p>";
+    sidebarList.innerHTML = "<p>No favorites yet.</p>";
     return;
   }
   let html = "";
   favorites.forEach((book,id)=>{
-    html += `<div class="sidebar-book" data-id="${id}">
-      <img src="${escapeHtml(book.img)}" 
-           style="width:40px;height:56px;object-fit:cover;border-radius:4px;">
-      <div style="font-size:12px;color:#fff;">
-        <strong>${escapeHtml(book.title)}</strong><br>
-        <span style="color:#aaa;">${escapeHtml(book.authors)}</span>
-      </div>
-    </div>`;
+    html += `
+      <div class="sidebar-book" data-id="${id}">
+        <img src="${escapeHtml(book.img)}" 
+             style="width:40px;height:56px;object-fit:cover;border-radius:4px;">
+        <div style="font-size:12px;color:#fff;">
+          <strong>${escapeHtml(book.title)}</strong><br>
+          <span style="color:#aaa;">${escapeHtml(book.authors)}</span>
+        </div>
+      </div>`;
   });
-  sidebarContent.innerHTML = html;
+  sidebarList.innerHTML = html;
 }
 
 document.addEventListener('click', e=>{
@@ -216,9 +216,8 @@ document.addEventListener('click', e=>{
         <p style="margin:0 0 6px 0;color:#fff;"><strong>Genres:</strong> ${escapeHtml(genres)}</p>
         <div style="margin-top:6px;color:#fff;">${escapeHtml(desc)}</div>
       </div>
-    </div>
-  `;
-
+    </div>`;
+  
   const rect = card.getBoundingClientRect();
   let left = rect.right + 10;
   let top = rect.top;
@@ -235,6 +234,7 @@ closeBtn.addEventListener('click',()=>{overlay.style.display='none';});
 overlay.addEventListener('click',e=>{if(e.target===overlay) overlay.style.display='none';});
 document.addEventListener('keydown',e=>{if(e.key==='Escape') overlay.style.display='none';});
 </script>
+
 """)
 
 demo.launch()
