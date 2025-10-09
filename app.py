@@ -38,9 +38,9 @@ def build_books_grid_html(books_df):
 
 
 # ---------- Search Functions ----------
-def search_books(query):
+def search_books(query, search_results_state, search_page_state):
     if not query.strip():
-        return gr.update(), gr.update(visible=False)
+        return gr.update(), gr.update(visible=False), pd.DataFrame(), 0, gr.update(visible=False)
     
     query = query.lower().strip()
     # Search across all fields
@@ -52,14 +52,37 @@ def search_books(query):
     combined_mask = title_mask | author_mask | genre_mask | desc_mask
     results = df[combined_mask]
     
-    html = build_books_grid_html(results)
-    return html, gr.update(visible=True)
+    # Load first batch
+    first_batch = results.head(BOOKS_PER_LOAD)
+    html = build_books_grid_html(first_batch)
+    
+    has_more = len(results) > BOOKS_PER_LOAD
+    return html, gr.update(visible=True), results, 1, gr.update(visible=has_more)
+
+def load_more_search(search_results_state, search_page_state):
+    if search_results_state is None or search_results_state.empty:
+        return gr.update(), search_page_state, gr.update(visible=False)
+    
+    start = search_page_state * BOOKS_PER_LOAD
+    end = start + BOOKS_PER_LOAD
+    new_books = search_results_state.iloc[start:end]
+    
+    if new_books.empty:
+        return gr.update(), search_page_state, gr.update(visible=False)
+    
+    # Get all books loaded so far
+    all_loaded = search_results_state.iloc[:end]
+    html = build_books_grid_html(all_loaded)
+    
+    has_more = end < len(search_results_state)
+    return html, search_page_state + 1, gr.update(visible=has_more)
 
 def clear_search(random_loaded_state):
     # Reset to random books
     first_batch = random_loaded_state.head(BOOKS_PER_LOAD)
     html = build_books_grid_html(first_batch)
-    return gr.update(value=""), html, gr.update(visible=False)
+    has_more = len(random_loaded_state) > BOOKS_PER_LOAD
+    return gr.update(value=""), html, gr.update(visible=False), pd.DataFrame(), 0, gr.update(visible=has_more)
 
 # ---------- Gradio UI ----------
 with gr.Blocks(css="""
@@ -143,7 +166,12 @@ with gr.Blocks(css="""
         random_loaded_state = gr.State(df.sample(frac=1).reset_index(drop=True))
         random_display_state = gr.State(pd.DataFrame())
         random_page_state = gr.State(0)
-    
+
+        # ---------- ADD THESE SEARCH STATES ----------
+        search_results_state = gr.State(pd.DataFrame())
+        search_page_state = gr.State(0)
+        # ---------- END SEARCH STATES ----------
+        
         # Scroll section as flex container
         with gr.Column(elem_classes="scroll-section"):
             random_container = gr.HTML()
@@ -191,23 +219,29 @@ with gr.Blocks(css="""
             # ---------- Search Logic ----------
             search_btn.click(
                 search_books,
-                [search_input],
-                [random_container, clear_search_btn]
+                [search_input, search_results_state, search_page_state],
+                [random_container, clear_search_btn, search_results_state, search_page_state, random_load_btn]
             )
             
             # Enter key to search
             search_input.submit(
                 search_books,
-                [search_input],
-                [random_container, clear_search_btn]
+                [search_input, search_results_state, search_page_state],
+                [random_container, clear_search_btn, search_results_state, search_page_state, random_load_btn]
+            )
+            
+            # Load more for search results
+            random_load_btn.click(
+                load_more_search,
+                [search_results_state, search_page_state],
+                [random_container, search_page_state, random_load_btn]
             )
             
             clear_search_btn.click(
                 clear_search,
                 [random_loaded_state],
-                [search_input, random_container, clear_search_btn]
+                [search_input, random_container, clear_search_btn, search_results_state, search_page_state, random_load_btn]
             )
-    
             # ---------- Initial Load ----------
             def initial_load(loaded_books):
                 return load_more(loaded_books, pd.DataFrame(), 0)
