@@ -429,6 +429,8 @@ document.addEventListener('click', e=>{
         <h2 style="margin:0 0 8px 0;color:#fff;">${escapeHtml(title)}</h2>
         <p style="margin:0 0 4px 0;color:#fff;"><strong>Author(s):</strong> ${escapeHtml(authors)}</p>
         <p style="margin:0 0 6px 0;color:#fff;"><strong>Genres:</strong> ${escapeHtml(genres)}</p>
+
+        <div><strong>Description:</strong></div>
         <div class="desc-scroll">${escapeHtml(desc)}</div>
       </div>
     </div>`;
