@@ -88,28 +88,34 @@ with gr.Blocks(css="""
     with gr.Row(elem_classes="app-container"):
         with gr.Column(elem_classes="main-content"):
             gr.Markdown("# 📚 Dark Library Explorer")
-
+    
             # ---------- Random Books Section ----------
             gr.Markdown("🎲 Random Books", elem_classes="section-header")
             random_loaded_state = gr.State(df.sample(frac=1).reset_index(drop=True))
             random_display_state = gr.State(pd.DataFrame())
             random_page_state = gr.State(0)
-            
+    
+            # Scrollable container for books
             with gr.Column(elem_classes="scroll-section"):
                 random_container = gr.HTML()
+    
+            # Load More button outside scroll section
             random_load_btn = gr.Button("📘 Load More Random Books", elem_classes="load-more-btn")
-
+    
             # ---------- Popular Books Section ----------
             gr.Markdown("🌟 Popular Books", elem_classes="section-header")
             popular_loaded_state = gr.State(df.head(len(df)))
             popular_display_state = gr.State(pd.DataFrame())
             popular_page_state = gr.State(0)
-            
+
+            # Scrollable container for books
             with gr.Column(elem_classes="scroll-section"):
                 popular_container = gr.HTML()
+    
+            # Load More button outside scroll section
             popular_load_btn = gr.Button("📖 Load More Popular Books", elem_classes="load-more-btn")
-
-            # ---------- Load more logic ----------
+    
+            # ---------- Load More Logic ----------
             def load_more(loaded_books, display_books, page_idx):
                 start = page_idx * BOOKS_PER_LOAD
                 end = start + BOOKS_PER_LOAD
@@ -124,7 +130,7 @@ with gr.Blocks(css="""
                 html = build_books_grid_html(combined)
                 has_more = end < len(loaded_books)
                 return combined, gr.update(value=html), page_idx + 1, gr.update(visible=has_more)
-
+    
             random_load_btn.click(
                 load_more,
                 [random_loaded_state, random_display_state, random_page_state],
@@ -135,10 +141,11 @@ with gr.Blocks(css="""
                 [popular_loaded_state, popular_display_state, popular_page_state],
                 [popular_display_state, popular_container, popular_page_state, popular_load_btn]
             )
-
+    
+            # ---------- Initial Load ----------
             def initial_load(loaded_books):
                 return load_more(loaded_books, pd.DataFrame(), 0)
-
+    
             demo.load(
                 lambda: [
                     *initial_load(random_loaded_state.value),
@@ -149,6 +156,8 @@ with gr.Blocks(css="""
                     popular_display_state, popular_container, popular_page_state, popular_load_btn
                 ]
             )
+
+ 
 
         with gr.Column(elem_classes="sidebar"):
             gr.Markdown("## ⭐ Favorites")
