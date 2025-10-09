@@ -204,12 +204,55 @@ with gr.Blocks(css="""
                 html = build_books_grid_html(combined)
                 has_more = end < len(loaded_books)
                 return combined, gr.update(value=html), page_idx + 1, gr.update(visible=has_more)
+
+            # ---------- Combined Load More Logic ----------
+            def load_more_combined(random_loaded_state, random_display_state, random_page_state, 
+                                 search_results_state, search_page_state):
+                # Check if we're in search mode
+                if search_results_state is not None and not search_results_state.empty:
+                    # Load more search results
+                    start = search_page_state * BOOKS_PER_LOAD
+                    end = start + BOOKS_PER_LOAD
+                    new_books = search_results_state.iloc[start:end]
+                    
+                    if new_books.empty:
+                        combined = search_results_state.iloc[:start]
+                        html = build_books_grid_html(combined)
+                        return html, random_display_state, random_page_state, gr.update(visible=False), search_page_state
+                    
+                    # Get all books loaded so far
+                    all_loaded = search_results_state.iloc[:end]
+                    html = build_books_grid_html(all_loaded)
+                    
+                    has_more = end < len(search_results_state)
+                    return html, random_display_state, random_page_state, gr.update(visible=has_more), search_page_state + 1
+                else:
+                    # Load more random books
+                    start = random_page_state * BOOKS_PER_LOAD
+                    end = start + BOOKS_PER_LOAD
+                    new_books = random_loaded_state.iloc[start:end]
+                    
+                    if random_display_state is None or random_display_state.empty:
+                        random_display_state = pd.DataFrame()
+                    
+                    if new_books.empty:
+                        combined = random_display_state
+                        html = build_books_grid_html(combined)
+                        return html, combined, random_page_state, gr.update(visible=False), search_page_state
+                    
+                    combined = pd.concat([random_display_state, new_books], ignore_index=True)
+                    html = build_books_grid_html(combined)
+                    
+                    has_more = end < len(random_loaded_state)
+                    return html, combined, random_page_state + 1, gr.update(visible=has_more), search_page_state
+    
     
             random_load_btn.click(
-                load_more,
-                [random_loaded_state, random_display_state, random_page_state],
-                [random_display_state, random_container, random_page_state, random_load_btn]
+                load_more_combined,
+                [random_loaded_state, random_display_state, random_page_state, search_results_state, search_page_state],
+                [random_container, random_display_state, random_page_state, random_load_btn, search_page_state]
             )
+            
             popular_load_btn.click(
                 load_more,
                 [popular_loaded_state, popular_display_state, popular_page_state],
@@ -228,13 +271,6 @@ with gr.Blocks(css="""
                 search_books,
                 [search_input, search_results_state, search_page_state],
                 [random_container, clear_search_btn, search_results_state, search_page_state, random_load_btn]
-            )
-            
-            # Load more for search results
-            random_load_btn.click(
-                load_more_search,
-                [search_results_state, search_page_state],
-                [random_container, search_page_state, random_load_btn]
             )
             
             clear_search_btn.click(
