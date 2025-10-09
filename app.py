@@ -106,7 +106,6 @@ with gr.Blocks(css="""
     
         with gr.Column(elem_classes="scroll-section"):
             popular_container = gr.HTML()
-            popular_load_btn = gr.Button("📖 Load More Popular Books", elem_classes="load-more-btn")
     
         
             # Load More button outside scroll section
