@@ -47,9 +47,8 @@ def search_books(query, search_results_state, search_page_state):
     title_mask = df['title'].str.lower().str.contains(query, na=False)
     author_mask = df['authors'].apply(lambda authors: any(query in author.lower() for author in authors))
     genre_mask = df['genres'].apply(lambda genres: any(query in genre.lower() for genre in genres))
-    desc_mask = df['description'].str.lower().str.contains(query, na=False)
     
-    combined_mask = title_mask | author_mask | genre_mask | desc_mask
+    combined_mask = title_mask | author_mask | genre_mask 
     results = df[combined_mask]
     
     # Load first batch
