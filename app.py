@@ -85,10 +85,7 @@ def get_recommendations(favorite_ids):
     
     return recommendations
 
-def refresh_recommendations():
-    # Get favorite IDs from JavaScript (we'll use a simple approach)
-    print("refresh recs is called")
-    return build_books_grid_html(pd.DataFrame()), pd.DataFrame(), 0, gr.update(visible=False)
+
 
 def load_more_recommendations(recs_state, recs_page_state):
     if recs_state is None or recs_state.empty:
@@ -294,7 +291,6 @@ with gr.Blocks(css="""
         recs_state = gr.State(pd.DataFrame())
         recs_page_state = gr.State(0)
         # Add this state variable with your other states
-        favorite_ids_state = gr.State([])
         
         # Add this hidden textbox in your UI (after search section)
         favorite_ids_input = gr.Textbox(visible=False, elem_id="favorite-ids-input")
@@ -304,7 +300,7 @@ with gr.Blocks(css="""
             with gr.Row(elem_classes="refresh-row"):
                 refresh_recs_btn = gr.Button("🔄 Refresh Recommendations", elem_classes="load-more-btn")
                 recs_load_btn = gr.Button("📚 Load More Recommendations", elem_classes="load-more-btn", visible=False)
-                debug_btn = gr.Button("🐛 Debug: Check Favorites", elem_classes="load-more-btn")
+
         
         # ---------- LOAD MORE LOGIC ----------
         def load_more(loaded_books, display_books, page_idx):
@@ -364,19 +360,6 @@ with gr.Blocks(css="""
 
 
 
-
-        # Add this function to handle the hidden input
-        def handle_favorite_ids_change(favorite_ids_json):
-            """Triggered when JS updates hidden input. Stores fav IDs in Gradio state."""
-            print(f"DEBUG: Received favorite_ids_json: {favorite_ids_json}")
-
-            try:
-                favorite_ids = json.loads(favorite_ids_json) if favorite_ids_json else []
-                print("Received favorite IDs:", favorite_ids)
-                return favorite_ids
-            except Exception as e:
-                print("Error parsing favorites:", e)
-                return []
 
         def debug_favorites():
             favorite_ids = favorite_ids_state.value if hasattr(favorite_ids_state, 'value') else []
@@ -566,8 +549,7 @@ function updateFavoritesSidebar(){
   });
   sidebarList.innerHTML = html;
   
-  // Sync to Python after updating sidebar
-  syncFavoritesToPython();
+
 
 }
 
