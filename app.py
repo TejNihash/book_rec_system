@@ -304,6 +304,7 @@ with gr.Blocks(css="""
             with gr.Row(elem_classes="refresh-row"):
                 refresh_recs_btn = gr.Button("🔄 Refresh Recommendations", elem_classes="load-more-btn")
                 recs_load_btn = gr.Button("📚 Load More Recommendations", elem_classes="load-more-btn", visible=False)
+                debug_btn = gr.Button("🐛 Debug: Check Favorites", elem_classes="load-more-btn")
         
         # ---------- LOAD MORE LOGIC ----------
         def load_more(loaded_books, display_books, page_idx):
@@ -367,6 +368,8 @@ with gr.Blocks(css="""
         # Add this function to handle the hidden input
         def handle_favorite_ids_change(favorite_ids_json):
             """Triggered when JS updates hidden input. Stores fav IDs in Gradio state."""
+            print(f"DEBUG: Received favorite_ids_json: {favorite_ids_json}")
+
             try:
                 favorite_ids = json.loads(favorite_ids_json) if favorite_ids_json else []
                 print("Received favorite IDs:", favorite_ids)
@@ -375,7 +378,11 @@ with gr.Blocks(css="""
                 print("Error parsing favorites:", e)
                 return []
 
+        def debug_favorites():
+            favorite_ids = favorite_ids_state.value if hasattr(favorite_ids_state, 'value') else []
+            return f"DEBUG: Current favorite IDs: {favorite_ids}"
 
+debug_btn.click(debug_favorites, outputs=[recs_container])
         # Add this function for the refresh button
         def refresh_recommendations_with_favorites(favorite_ids):
             """Generate recommendations based on current favorite IDs."""
@@ -530,6 +537,18 @@ function updateFavoritesSidebar(){
   syncFavoritesToPython();
 
 }
+
+// Add this debug function to check if the hidden input exists
+function checkHiddenInput() {
+    const hiddenInput = document.getElementById('favorite-ids-input');
+    console.log('DEBUG: Hidden input exists?', !!hiddenInput);
+    if (hiddenInput) {
+        console.log('DEBUG: Hidden input value:', hiddenInput.value);
+    }
+}
+
+// Call it when the page loads
+setTimeout(checkHiddenInput, 1000);
 
 // ---------- Click Handler ----------
 document.addEventListener('click', e=>{
