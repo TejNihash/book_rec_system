@@ -382,11 +382,12 @@ with gr.Blocks(css="""
             # Refresh button
             recs_refresh_btn.click(
                 lambda fav_ids: refresh_recommendations(
-                    [fid.strip() for fid in fav_ids.split(",") if fid.strip()]
+                    [fid.strip() for fid in (fav_ids or "").split(",") if fid.strip()]
                 ),
                 [fav_ids_box],
                 [recs_container, recs_state, recs_display_state, recs_page_state, recs_load_btn]
             )
+
 
             # Load More button
             recs_load_btn.click(
