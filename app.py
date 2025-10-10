@@ -438,19 +438,20 @@ with gr.Blocks(css="""
             [recs_container, recs_page_state, recs_load_btn]
         )
 
+        # Step 1: JS → get favorite IDs
         refresh_recs_btn.click(
-            refresh_recommendations_with_favorites,
-            inputs=[favorite_ids_state],
-            outputs=[recs_container, recs_state, recs_page_state, recs_load_btn]
+            None,
+            _js="() => getFavoritesFromJS()",  # calls the JS function
+            outputs=[favorite_ids_input],      # store output here
         )
-
-
-        # Add this handler for the hidden input:
+        
+        # Step 2: Python → get recs using those IDs
         favorite_ids_input.change(
-            handle_favorite_ids_change,
+            refresh_recommendations_with_favorites,
             [favorite_ids_input],
-            [favorite_ids_state]
+            [recs_container, recs_state, recs_page_state, recs_load_btn],
         )
+
         # ---------- INITIAL LOAD ----------
         def initial_load(loaded_books):
             return load_more(loaded_books, pd.DataFrame(), 0)
@@ -622,6 +623,14 @@ document.addEventListener('click', e=>{
 closeBtn.addEventListener('click',()=>{overlay.style.display='none';});
 overlay.addEventListener('click',e=>{if(e.target===overlay) overlay.style.display='none';});
 document.addEventListener('keydown',e=>{if(e.key==='Escape') overlay.style.display='none';});
+
+async function getFavoritesFromJS() {
+    return Array.from(favorites.keys());
+}
+
+// Expose this function so Gradio can call it
+window.getFavoritesFromJS = getFavoritesFromJS;
+
 </script>
 """)
 
