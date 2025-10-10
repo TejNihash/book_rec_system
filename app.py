@@ -354,6 +354,22 @@ with gr.Blocks(css="""
             def update_fav_ids(fav_ids):
                 return fav_ids
 
+            # 1️⃣ Place the function here
+            def update_fav_ids_from_js(fav_ids_json):
+                import json
+                try:
+                    fav_ids = json.loads(fav_ids_json)
+                except:
+                    fav_ids = []
+                return fav_ids, *refresh_recommendations(fav_ids)
+            
+            sync_favs_btn = gr.Button(visible=False, elem_id="sync-favs-btn")
+            sync_favs_btn.click(
+                fn=update_fav_ids_from_js,
+                inputs=[sync_favs_btn],
+                outputs=[fav_ids_state, recs_container, recs_state, recs_display_state, recs_page_state, recs_load_btn]
+            )
+
 
             def load_more_recommendations(recs_state, recs_display_state, recs_page_state):
                 start = recs_page_state * BOOKS_PER_LOAD
@@ -497,13 +513,24 @@ function updateFavoritesSidebar(){
 }
 
 // ------sync fav ids with python for recs------
-function syncFavoritesToPython() {
+// Add a hidden button in your HTML
+<button id="sync-favs-btn" style="display:none"></button>
+
+<script>
+const syncFavsBtn = document.getElementById("sync-favs-btn");
+
+// New JS function to sync favorite IDs
+window.syncFavoritesToPython = function() {
     const fav_ids = Array.from(favorites.keys());
-    // trigger a Python update via a hidden "event"
-    if (window.syncFavsCallback) {
-        window.syncFavsCallback(fav_ids);
-    }
+    syncFavsBtn.dataset.favIds = JSON.stringify(fav_ids);  // store JSON string
+    syncFavsBtn.click();  // trigger Python callback
 }
+
+// Attach refresh button to JS function
+document.getElementById('recs-refresh-btn').addEventListener("click", ()=>{
+    window.syncFavoritesToPython();
+});
+</script>
 
 
 // ---------- Click Handler ----------
