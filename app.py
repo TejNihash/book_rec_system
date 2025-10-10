@@ -1,3 +1,5 @@
+
+
 import ast
 import pandas as pd
 import gradio as gr
@@ -123,6 +125,13 @@ def load_more_recommendations(recs_state, recs_page_state):
     
     has_more = end < len(recs_state)
     return html, recs_page_state + 1, gr.update(visible=has_more)
+
+def handle_favorite_ids_change(favorite_ids_json):
+    try:
+        favorite_ids = json.loads(favorite_ids_json) if favorite_ids_json else []
+        return favorite_ids, *refresh_recommendations(favorite_ids)
+    except:
+        return [], build_books_grid_html(pd.DataFrame()), pd.DataFrame(), 0, gr.update(visible=False)
 
 # ---------- Search Functions ----------
 def search_books(query, search_results_state, search_page_state):
@@ -279,6 +288,9 @@ with gr.Blocks(css="""
                 search_btn = gr.Button("Search", elem_classes="search-btn")
             
             clear_search_btn = gr.Button("Clear Search", elem_classes="clear-search", visible=False)
+        
+        # Hidden input for favorite IDs
+        favorite_ids_input = gr.Textbox(visible=False, elem_id="favorite-ids-input")
     
         # ---------- RANDOM BOOKS SECTION ----------
         gr.Markdown("🎲 Random Books", elem_classes="section-header")
@@ -307,6 +319,7 @@ with gr.Blocks(css="""
         # ---------- RECOMMENDATIONS SECTION ----------
         gr.Markdown("💫 Recommended For You", elem_classes="section-header")
         recs_state = gr.State(pd.DataFrame())
+        recs_display_state = gr.State(pd.DataFrame())
         recs_page_state = gr.State(0)
 
         with gr.Column(elem_classes="scroll-section"):
@@ -414,6 +427,13 @@ with gr.Blocks(css="""
             [recs_container, recs_state, recs_page_state, recs_load_btn]
         )
 
+        # Handle favorite IDs changes from JavaScript
+        favorite_ids_input.change(
+            handle_favorite_ids_change,
+            [favorite_ids_input],
+            [favorite_ids_state, recs_container, recs_state, recs_page_state, recs_load_btn]
+        )
+
         # ---------- INITIAL LOAD ----------
         def initial_load(loaded_books):
             return load_more(loaded_books, pd.DataFrame(), 0)
@@ -485,6 +505,17 @@ function updateFavoritesSidebar(){
   sidebarList.innerHTML = html;
 }
 
+// ---------- Sync Favorites to Python ----------
+function syncFavoritesToPython() {
+    const favoriteIds = Array.from(favorites.keys());
+    const hiddenInput = document.getElementById('favorite-ids-input');
+    console.log("what we got",favoriteIds)
+    if (hiddenInput) {
+        hiddenInput.value = JSON.stringify(favoriteIds);
+        hiddenInput.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+}
+
 // ---------- Click Handler ----------
 document.addEventListener('click', e=>{
   // --- Remove Favorite from Sidebar ---
@@ -496,6 +527,7 @@ document.addEventListener('click', e=>{
     updateFavoritesSidebar();
     const cardBtn = document.querySelector(`.book-card[data-id="${id}"] .fav-btn`);
     if(cardBtn) cardBtn.classList.remove('fav-active');
+    syncFavoritesToPython();
     return;
   }
 
@@ -516,6 +548,7 @@ document.addEventListener('click', e=>{
       favBtn.classList.add('fav-active');
     }
     updateFavoritesSidebar();
+    syncFavoritesToPython();
     return;
   }
 
@@ -559,4 +592,4 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape') overlay.style.displ
 </script>
 """)
 
-demo.launch(ssr_mode=False)
+demo.launch()
