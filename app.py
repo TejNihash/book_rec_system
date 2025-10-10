@@ -231,7 +231,6 @@ with gr.Blocks(css="""
             popular_load_btn = gr.Button("📖 Load More Popular Books", elem_classes="load-more-btn")
 
 
-        fav_ids_box = gr.Textbox(visible=False, label="Favorite IDs", elem_id="fav-ids-box")
 
 
 
