@@ -223,20 +223,81 @@ with gr.Blocks(css="""
     max-width:calc(100% - 320px); 
 }
 
-/* Mobile sidebar becomes full screen */
+/* Mobile sidebar becomes collapsible */
 @media (max-width: 768px) {
     .app-container {
         flex-direction: column;
+        height: auto;
+        min-height: 100vh;
     }
     .main-content {
         max-width: 100%;
         padding: 12px;
+        order: 1;
     }
     .sidebar {
         position: relative;
         width: 100%;
         height: auto;
-        max-height: 300px;
+        max-height: none;
+        order: 2;
+        border-left: none;
+        border-top: 1px solid #2a2a2a;
+    }
+    
+    /* Make favorites collapsible on mobile */
+    .sidebar-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        cursor: pointer;
+        padding: 8px 0;
+    }
+    
+    .sidebar-content {
+        max-height: 200px;
+        overflow-y: auto;
+        transition: max-height 0.3s ease;
+    }
+    
+    .sidebar.collapsed .sidebar-content {
+        max-height: 0;
+        overflow: hidden;
+    }
+    
+    /* Adjust grid for very small screens */
+    @media (max-width: 480px) {
+        .books-grid {
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+        }
+        .book-card {
+            padding: 6px;
+        }
+        .book-card img {
+            height: 140px;
+        }
+        .book-title {
+            font-size: 12px;
+        }
+        .book-authors {
+            font-size: 10px;
+        }
+    }
+    
+    /* Adjust search section for mobile */
+    .search-section {
+        padding: 12px;
+        margin-bottom: 16px;
+    }
+    
+    .search-row {
+        flex-direction: column;
+        gap: 8px;
+    }
+    
+    .search-btn {
+        padding: 10px 16px;
     }
 }
 .sidebar { width:300px; background:#141416; border-left:1px solid #2a2a2a; padding:16px; box-sizing:border-box; overflow-y:auto; position:fixed; right:0; top:0; bottom:0; color:#f0f0f0; }
@@ -458,7 +519,9 @@ with gr.Blocks(css="""
         )
 
         with gr.Column(elem_classes="sidebar"):
-            gr.Markdown("## ⭐ Favorites")
+            with gr.Row(elem_classes="sidebar-header"):
+                gr.Markdown("## ⭐ Favorites")
+                toggle_favs_btn = gr.Button("▼", elem_classes="shuffle-btn", size="sm")
             favorites_container = gr.HTML("<div id='favorites-list'><p>No favorites yet.</p></div>")
 
     # ---------- JAVASCRIPT ----------
@@ -521,6 +584,33 @@ function getFavoritesFromJS() {
   return JSON.stringify(ids);
 }
 window.getFavoritesFromJS = getFavoritesFromJS;
+
+// Mobile favorites toggle --------------------------------
+function toggleFavorites() {
+    const sidebar = document.querySelector('.sidebar');
+    const toggleBtn = document.querySelector('.sidebar-header button');
+    sidebar.classList.toggle('collapsed');
+    toggleBtn.textContent = sidebar.classList.contains('collapsed') ? '▶' : '▼';
+}
+
+// Add click handler for mobile toggle
+document.addEventListener('click', function(e) {
+    if (e.target.closest('.sidebar-header') || e.target.closest('.sidebar-header button')) {
+        toggleFavorites();
+    }
+});
+
+// Auto-collapse on very small screens
+function checkScreenSize() {
+    if (window.innerWidth <= 480) {
+        document.querySelector('.sidebar').classList.add('collapsed');
+    }
+}
+
+window.addEventListener('resize', checkScreenSize);
+setTimeout(checkScreenSize, 100);
+
+// ------------------------------
 
 document.addEventListener('click', e=>{
   if(e.target.closest('.remove-fav-btn')){
