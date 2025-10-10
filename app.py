@@ -1,4 +1,3 @@
-so can you check the code for this recommendation logic? there might be some problem with the fav ids storing. 
 
 
 import ast
