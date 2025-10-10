@@ -597,6 +597,11 @@ document.addEventListener('click', e=>{
 closeBtn.addEventListener('click',()=>{overlay.style.display='none';});
 overlay.addEventListener('click',e=>{if(e.target===overlay) overlay.style.display='none';});
 document.addEventListener('keydown',e=>{if(e.key==='Escape') overlay.style.display='none';});
+
+demo.register_event_handler("update_favorites", update_favorites, outputs=[
+    recs_container, recs_state, recs_display_state, recs_page_state, recs_load_btn
+])
+
 </script>
 
 """)
