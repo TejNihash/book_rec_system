@@ -22,7 +22,7 @@ BOOKS_PER_LOAD = 12
 # ---------- Helpers ----------
 
 # -------get similar books------
-def get_similar_books(fav_ids, top_k=12):
+def get_similar_books(fav_ids, top_k=100):
     if not fav_ids:
         return pd.DataFrame()
 
@@ -38,6 +38,18 @@ def get_similar_books(fav_ids, top_k=12):
         .head(top_k)
     )
     return recs
+
+def refresh_recommendations(fav_ids):
+    if not fav_ids:
+        html = "<div class='no-books'>Add some favorites to see recommendations!</div>"
+        return html, pd.DataFrame(), pd.DataFrame(), 0, gr.update(visible=False)
+    
+    rec_df = get_similar_books(fav_ids)  # get full ordered list
+    first_batch = rec_df.head(BOOKS_PER_LOAD)
+    html = build_books_grid_html(first_batch)
+    has_more = len(rec_df) > BOOKS_PER_LOAD
+    return html, rec_df, first_batch, 1, gr.update(visible=has_more)
+
 # -------
 def create_book_card_html(book):
     return f"""
@@ -245,12 +257,23 @@ with gr.Blocks(css="""
 
         fav_ids_box = gr.Textbox(visible=False, label="Favorite IDs")
 
+        # -----rec section------------
+
         gr.Markdown("💡 Recommended For You", elem_classes="section-header")
+        
+        # states for recs
+        recs_state = gr.State(pd.DataFrame())        # all recommended books
+        recs_display_state = gr.State(pd.DataFrame())  # subset currently shown
+        recs_page_state = gr.State(0)
+        
         with gr.Column(elem_classes="scroll-section"):
-            recs_container = gr.HTML()
-            recs_load_btn = gr.Button("🔁 Refresh Recommendations", elem_classes="load-more-btn")
-
-
+            # --- Refresh at the top ---
+            recs_refresh_btn = gr.Button("🔁 Refresh Recommendations", elem_classes="load-more-btn")
+        
+            recs_container = gr.HTML("<div class='no-books'>No recommendations yet.</div>")
+        
+            # --- Load More at the bottom ---
+            recs_load_btn = gr.Button("📖 Load More Recommendations", elem_classes="load-more-btn", visible=False)
 
 
         
@@ -323,6 +346,25 @@ with gr.Blocks(css="""
                 html = build_books_grid_html(rec_df)
                 return html, gr.update(visible=True)
 
+            def load_more_recommendations(recs_state, recs_display_state, recs_page_state):
+                start = recs_page_state * BOOKS_PER_LOAD
+                end = start + BOOKS_PER_LOAD
+                new_books = recs_state.iloc[start:end]
+            
+                if recs_display_state is None or recs_display_state.empty:
+                    recs_display_state = pd.DataFrame()
+            
+                if new_books.empty:
+                    combined = recs_display_state
+                    html = build_books_grid_html(combined)
+                    return combined, html, recs_page_state, gr.update(visible=False)
+            
+                combined = pd.concat([recs_display_state, new_books], ignore_index=True)
+                html = build_books_grid_html(combined)
+                has_more = end < len(recs_state)
+                return combined, html, recs_page_state + 1, gr.update(visible=has_more)
+            
+
     
     
             random_load_btn.click(
@@ -337,10 +379,18 @@ with gr.Blocks(css="""
                 [popular_display_state, popular_container, popular_page_state, popular_load_btn]
             )
 
-            recs_load_btn.click(
-                lambda fav_ids: update_recommendations(fav_ids.split(",") if fav_ids else []),
+            # Refresh button
+            recs_refresh_btn.click(
+                lambda fav_ids: refresh_recommendations(fav_ids.split(",") if fav_ids else []),
                 [fav_ids_box],
-                [recs_container, recs_load_btn]
+                [recs_container, recs_state, recs_display_state, recs_page_state, recs_load_btn]
+            )
+            
+            # Load More button
+            recs_load_btn.click(
+                load_more_recommendations,
+                [recs_state, recs_display_state, recs_page_state],
+                [recs_display_state, recs_container, recs_page_state, recs_load_btn]
             )
 
 
