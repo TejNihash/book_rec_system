@@ -306,7 +306,7 @@ with gr.Blocks(css="""
         with gr.Column(elem_classes="scroll-section"):
             recs_container = gr.HTML("<div class='no-books'>Add some favorites to get recommendations!</div>")
             with gr.Row(elem_classes="refresh-row"):
-                refresh_recs_btn = gr.Button("🔄 Refresh Recommendations", elem_classes="load-more-btn")
+                refresh_recs_btn = gr.Button("🔄 Refresh Recommendations", elem_id="refresh-recs-btn", elem_classes="load-more-btn")
                 recs_load_btn = gr.Button("📚 Load More Recommendations", elem_classes="load-more-btn", visible=False)
         
         # ---------- LOAD MORE LOGIC ----------
