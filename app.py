@@ -82,6 +82,7 @@ def refresh_recommendations(favorite_ids):
     return html, recommendations, 1, gr.update(visible=has_more)
 
 def refresh_recs_button(favorite_ids):
+    print("refresh recs is called",favorite_ids)
     if not favorite_ids:
         html = "<div class='no-books'>Add some favorites to get recommendations!</div>"
         return html, pd.DataFrame(), 0, gr.update(visible=False)
@@ -95,6 +96,7 @@ def refresh_recs_button(favorite_ids):
 
 
 def load_more_recommendations(recs_state, recs_page_state):
+    print("load more recs is called")
     if recs_state is None or recs_state.empty:
         return build_books_grid_html(pd.DataFrame()), recs_page_state, gr.update(visible=False)
     
@@ -439,7 +441,7 @@ with gr.Blocks(css="""
             favorites_container = gr.HTML("<div id='favorites-list'><p>No favorites yet.</p></div>")
 
     # ---------- JAVASCRIPT ----------
-    gr.HTML("""
+gr.HTML("""
 <div id="detail-overlay">
   <div id="detail-box">
     <span id="detail-close">&times;</span>
@@ -465,12 +467,10 @@ function escapeHtml(str){
 function updateFavoritesSidebar(){
   const sidebarList = document.getElementById('favorites-list');
   if(!sidebarList) return;
-
   if(favorites.size === 0){
     sidebarList.innerHTML = "<p>No favorites yet.</p>";
     return;
   }
-
   let html = "";
   favorites.forEach((book,id)=>{
     html += `
@@ -490,12 +490,11 @@ function updateFavoritesSidebar(){
   sidebarList.innerHTML = html;
 }
 
-// ---------- Sync Favorites to Python ----------
-function syncFavoritesToPython() {
+// ---------- Push Favorites to Python (only on refresh) ----------
+function pushFavoritesToPython(){
     const favoriteIds = Array.from(favorites.keys());
     const hiddenInput = document.getElementById('favorite-ids-input');
-    console.log("what we got",favoriteIds)
-    if (hiddenInput) {
+    if(hiddenInput){
         hiddenInput.value = JSON.stringify(favoriteIds);
         hiddenInput.dispatchEvent(new Event('input', { bubbles: true }));
     }
@@ -503,7 +502,7 @@ function syncFavoritesToPython() {
 
 // ---------- Click Handler ----------
 document.addEventListener('click', e=>{
-  // --- Remove Favorite from Sidebar ---
+  // Remove favorite from sidebar
   if(e.target.closest('.remove-fav-btn')){
     const parent = e.target.closest('.sidebar-book');
     if(!parent) return;
@@ -512,11 +511,10 @@ document.addEventListener('click', e=>{
     updateFavoritesSidebar();
     const cardBtn = document.querySelector(`.book-card[data-id="${id}"] .fav-btn`);
     if(cardBtn) cardBtn.classList.remove('fav-active');
-    syncFavoritesToPython();
     return;
   }
 
-  // --- Toggle Favorite from Card ---
+  // Toggle favorite from card
   const favBtn = e.target.closest('.fav-btn');
   if(favBtn){
     e.stopPropagation();
@@ -525,19 +523,19 @@ document.addEventListener('click', e=>{
     const title = card.dataset.title;
     const authors = card.dataset.authors;
     const img = card.dataset.img;
+
     if(favorites.has(bookId)){
       favorites.delete(bookId);
       favBtn.classList.remove('fav-active');
     } else {
-      favorites.set(bookId,{title,authors,img});
+      favorites.set(bookId, {title, authors, img});
       favBtn.classList.add('fav-active');
     }
     updateFavoritesSidebar();
-    syncFavoritesToPython();
     return;
   }
 
-  // --- Book Detail Popup ---
+  // Book Detail Popup
   const card = e.target.closest('.book-card');
   if(!card) return;
   const title = card.dataset.title;
@@ -565,7 +563,6 @@ document.addEventListener('click', e=>{
   if(top + box.offsetHeight > window.innerHeight - 20){ top = window.innerHeight - box.offsetHeight - 20; }
   box.style.left = `${Math.max(left, 10)}px`;
   box.style.top = `${Math.max(top, 10)}px`;
-
   overlay.style.display='block';
   box.scrollIntoView({ behavior: "smooth", block: "nearest" });
 });
@@ -574,7 +571,13 @@ document.addEventListener('click', e=>{
 closeBtn.addEventListener('click',()=>{overlay.style.display='none';});
 overlay.addEventListener('click',e=>{if(e.target===overlay) overlay.style.display='none';});
 document.addEventListener('keydown',e=>{if(e.key==='Escape') overlay.style.display='none';});
+
+// ---------- Refresh Recommendations Button ----------
+document.getElementById('refresh-recs-btn').addEventListener('click', ()=>{
+    pushFavoritesToPython();
+});
 </script>
 """)
+
 
 demo.launch()
