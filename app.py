@@ -270,6 +270,8 @@ with gr.Blocks(css="""
         recs_state = gr.State(pd.DataFrame())        # all recommended books
         recs_display_state = gr.State(pd.DataFrame())  # subset currently shown
         recs_page_state = gr.State(0)
+        fav_ids_state = gr.State([])
+
 
 
         
@@ -434,6 +436,14 @@ with gr.Blocks(css="""
                 [recs_display_state, recs_container, recs_page_state, recs_load_btn]
             )
 
+            sync_favs_btn = gr.Button(visible=False)
+            
+            sync_favs_btn.click(
+                refresh_recommendations,
+                [fav_ids_state],
+                [recs_container, recs_state, recs_display_state, recs_page_state, recs_load_btn]
+            )
+
 
             # ---------- Search Logic ----------
             search_btn.click(
@@ -528,22 +538,22 @@ function updateFavoritesSidebar(){
 }
 
 // ------sync fav ids with python for recs------
-function findFavBox() {
-  const gradioApp = document.querySelector('gradio-app') || document.querySelector('body > gradio-app');
-  if (!gradioApp) return null;
-  const shadow = gradioApp.shadowRoot || gradioApp; 
-  return shadow.querySelector('textarea[aria-label="Favorite IDs"]');
-}
+async function syncFavoritesToPython() {
+  const fav_ids = Array.from(favorites.keys());
+  console.log("🔥 Syncing favorites to Python:", fav_ids);
 
-function syncFavoritesToPython() {
-  const fav_ids = Array.from(favorites.keys()).join(',');
-  const favBox = findFavBox();
-  console.log("Syncing favorites to Python:", fav_ids, "favBox found:", !!favBox);
-  if (favBox) {
-    favBox.value = fav_ids;
-    favBox.dispatchEvent(new Event('input', { bubbles: true }));
-  } else {
-    console.warn("⚠️ favBox not found. The hidden textbox may be rendered in a shadow DOM or not yet created.");
+  // Wait until Gradio client is ready
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  while (!window.gradio_client) await sleep(100);
+
+  try {
+    // Update state directly
+    await window.gradio_client.setValue("fav_ids_state", fav_ids);
+    // Trigger backend refresh
+    await window.gradio_client.click("sync_favs_btn");
+    console.log("✅ Synced favorites successfully!");
+  } catch (err) {
+    console.error("⚠️ Failed to sync favorites:", err);
   }
 }
 
