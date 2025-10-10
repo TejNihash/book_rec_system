@@ -54,12 +54,6 @@ def refresh_recommendations_from_state(fav_ids_list):
     has_more = len(rec_df) > BOOKS_PER_LOAD
     return html, rec_df, first_batch, 1, gr.update(visible=has_more)
 
-# Wire a button click to the State
-recs_refresh_btn.click(
-    refresh_recommendations_from_state,
-    inputs=[fav_ids_state],
-    outputs=[recs_container, recs_state, recs_display_state, recs_page_state, recs_load_btn]
-)
 
 # -------
 def create_book_card_html(book):
@@ -433,10 +427,11 @@ with gr.Blocks(css="""
 
             # Refresh button
             # Your refresh click should be defensive about None and clean the input
+            # Wire a button click to the State
             recs_refresh_btn.click(
-                lambda fav_ids: refresh_recommendations(parse_fav_ids_string(fav_ids)),
-                [fav_ids_box],
-                [recs_container, recs_state, recs_display_state, recs_page_state, recs_load_btn]
+                refresh_recommendations_from_state,
+                inputs=[fav_ids_state],
+                outputs=[recs_container, recs_state, recs_display_state, recs_page_state, recs_load_btn]
             )  
             # Load More button
             recs_load_btn.click(
