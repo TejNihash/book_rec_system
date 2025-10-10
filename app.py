@@ -437,15 +437,14 @@ with gr.Blocks(css="""
             [recs_state, recs_page_state],
             [recs_container, recs_page_state, recs_load_btn]
         )
-
-        # Step 1: JS → get favorite IDs
+        # Step 1: JS gets favorites
         refresh_recs_btn.click(
             None,
-            _js="() => getFavoritesFromJS()",  # calls the JS function
-            outputs=[favorite_ids_input],      # store output here
+            js="() => getFavoritesFromJS()",   # ✅ modern syntax (not _js)
+            outputs=[favorite_ids_input],
         )
         
-        # Step 2: Python → get recs using those IDs
+        # Step 2: Python uses them
         favorite_ids_input.change(
             refresh_recommendations_with_favorites,
             [favorite_ids_input],
@@ -624,12 +623,13 @@ closeBtn.addEventListener('click',()=>{overlay.style.display='none';});
 overlay.addEventListener('click',e=>{if(e.target===overlay) overlay.style.display='none';});
 document.addEventListener('keydown',e=>{if(e.key==='Escape') overlay.style.display='none';});
 
-async function getFavoritesFromJS() {
-    return Array.from(favorites.keys());
+function getFavoritesFromJS() {
+  const ids = Array.from(favorites.keys());
+  console.log("🔁 Sending favorites to Python:", ids);
+  return ids;   // Gradio 5 automatically serializes this
 }
-
-// Expose this function so Gradio can call it
 window.getFavoritesFromJS = getFavoritesFromJS;
+
 
 </script>
 """)
