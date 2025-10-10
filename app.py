@@ -366,36 +366,32 @@ with gr.Blocks(css="""
 
         # Add this function to handle the hidden input
         def handle_favorite_ids_change(favorite_ids_json):
-            """Convert JSON string from JS to Python list and store in state"""
+            """Triggered when JS updates hidden input. Stores fav IDs in Gradio state."""
             try:
-                if favorite_ids_json:
-                    favorite_ids = json.loads(favorite_ids_json)
-                    favorite_ids_state.value = favorite_ids
-                else:
-                    favorite_ids = []
+                favorite_ids = json.loads(favorite_ids_json) if favorite_ids_json else []
+                print("Received favorite IDs:", favorite_ids)
                 return favorite_ids
-            except:
+            except Exception as e:
+                print("Error parsing favorites:", e)
                 return []
 
+
         # Add this function for the refresh button
-        def refresh_recommendations_with_favorites():
-            """Use the stored favorite IDs to generate recommendations"""
-            favorite_ids = favorite_ids_state.value if hasattr(favorite_ids_state, 'value') else []
-            
+        def refresh_recommendations_with_favorites(favorite_ids):
+            """Generate recommendations based on current favorite IDs."""
+            print("Refreshing recs with:", favorite_ids)
             if not favorite_ids:
                 return gr.update(value="<div class='no-books'>Add some favorites first!</div>"), pd.DataFrame(), 0, gr.update(visible=False)
             
-            # Generate recommendations
+            # Compute recs
             recommendations = get_recommendations(favorite_ids)
-            
             if recommendations.empty:
                 return gr.update(value="<div class='no-books'>No recommendations found for your favorites.</div>"), pd.DataFrame(), 0, gr.update(visible=False)
             
-            # Load first batch
             first_batch = recommendations.head(BOOKS_PER_LOAD)
             html = build_books_grid_html(first_batch)
-            
             has_more = len(recommendations) > BOOKS_PER_LOAD
+            
             return html, recommendations, 1, gr.update(visible=has_more)
 
         # ---------- EVENT HANDLERS ----------
@@ -437,8 +433,10 @@ with gr.Blocks(css="""
 
         refresh_recs_btn.click(
             refresh_recommendations_with_favorites,
+            inputs=[favorite_ids_state],
             outputs=[recs_container, recs_state, recs_page_state, recs_load_btn]
         )
+
 
         # Add this handler for the hidden input:
         favorite_ids_input.change(
