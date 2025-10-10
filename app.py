@@ -24,7 +24,7 @@ BOOKS_PER_REC = 100
 # ---------- Helpers ----------
 
 # -------get similar books------
-def get_similar_books(fav_ids, top_k=100):
+'''def get_similar_books(fav_ids, top_k=100):
     if not fav_ids:
         return pd.DataFrame()
 
@@ -39,15 +39,16 @@ def get_similar_books(fav_ids, top_k=100):
         .sort_values("similarity", ascending=False)
         .head(top_k)
     )
-    return recs
+    return recs'''
 
 def refresh_recommendations(fav_ids):
-    print("Received favorites:", fav_ids)  # debug
+    # fav_ids is a list of strings now (from parse_fav_ids_string)
+    print("Received favorites:", fav_ids)   # <<-- very important debug line
     if not fav_ids:
         html = "<div class='no-books'>Add some favorites to see recommendations!</div>"
         return html, pd.DataFrame(), pd.DataFrame(), 0, gr.update(visible=False)
-    
-    rec_df = get_similar_books(fav_ids)  # get full ordered list
+
+    rec_df = get_similar_books(fav_ids, top_k=500)  # get a large candidate set
     first_batch = rec_df.head(BOOKS_PER_LOAD)
     html = build_books_grid_html(first_batch)
     has_more = len(rec_df) > BOOKS_PER_LOAD
@@ -258,7 +259,7 @@ with gr.Blocks(css="""
             popular_load_btn = gr.Button("📖 Load More Popular Books", elem_classes="load-more-btn")
 
 
-        fav_ids_box = gr.Textbox(visible=False, label="Favorite IDs")
+        fav_ids_box = gr.Textbox(visible=False, label="Favorite IDs", elem_id="fav-ids-box")
 
         # -----rec section------------
 
@@ -270,7 +271,6 @@ with gr.Blocks(css="""
         recs_display_state = gr.State(pd.DataFrame())  # subset currently shown
         recs_page_state = gr.State(0)
 
-        fav_ids_state = gr.State([])   # store favorite IDs as a Python list
 
         
         with gr.Column(elem_classes="scroll-section"):
@@ -344,6 +344,31 @@ with gr.Blocks(css="""
 
             # ------- update recommendations logic -------
 
+            # defensive helper to normalize the incoming fav_ids string -> list[str]
+            def parse_fav_ids_string(fav_ids_str):
+                # fav_ids_str may be None
+                tokens = [x.strip() for x in (fav_ids_str or "").split(",") if x.strip()]
+                # keep as strings (your df ids are strings)
+                return [str(x) for x in tokens]
+
+            def get_similar_books(fav_ids, top_k=100):
+                if not fav_ids:
+                    return pd.DataFrame()
+                fav_ids = [str(x) for x in fav_ids]
+                fav_books = df[df["id"].isin(fav_ids)]
+                if fav_books.empty:
+                    print("DEBUG: get_similar_books - no fav books found for ids:", fav_ids)
+                fav_embs = np.stack(fav_books["embedding"].values) if not fav_books.empty else np.empty((0, embeddings.shape[1]))
+                if fav_embs.size == 0:
+                    return pd.DataFrame()
+                mean_emb = fav_embs.mean(axis=0).reshape(1, -1)
+                sims = cosine_similarity(mean_emb, np.stack(df["embedding"].values))[0]
+                df_with_sims = df.copy()
+                df_with_sims["similarity"] = sims
+                recs = df_with_sims[~df_with_sims["id"].isin(fav_ids)].sort_values("similarity", ascending=False).head(top_k)
+                return recs
+
+
             def update_favorites(event: gr.EventData):
                 fav_ids = event.data.get("fav_ids", [])
                 print("Updated favorites:", fav_ids)
@@ -396,14 +421,12 @@ with gr.Blocks(css="""
             )
 
             # Refresh button
+            # Your refresh click should be defensive about None and clean the input
             recs_refresh_btn.click(
-                lambda fav_ids: refresh_recommendations(
-                    [x.strip() for x in (fav_ids or "").split(",") if x.strip()]
-                ),
+                lambda fav_ids: refresh_recommendations(parse_fav_ids_string(fav_ids)),
                 [fav_ids_box],
                 [recs_container, recs_state, recs_display_state, recs_page_state, recs_load_btn]
-            )
-                    
+            )  
             # Load More button
             recs_load_btn.click(
                 load_more_recommendations,
@@ -507,19 +530,30 @@ function updateFavoritesSidebar(){
 // ------sync fav ids with python for recs------
 function syncFavoritesToPython() {
   const fav_ids = Array.from(favorites.keys()).join(',');
-  const favBox = document.querySelector('textarea[aria-label="Favorite IDs"]');
-  console.log("Syncing favorites to Python:", fav_ids);
-  
+  // preferred: the wrapper element Gradio outputs will have the elem_id we set
+  const wrapper = document.getElementById('fav-ids-box'); // this is the component wrapper
+  // The actual editable area is a <textarea> nested inside that wrapper.
+  let favBox = null;
+  if (wrapper) {
+    favBox = wrapper.querySelector('textarea') || wrapper.querySelector('input');
+  }
+
+  // fallback: try aria-label
+  if (!favBox) {
+    favBox = document.querySelector('textarea[aria-label="Favorite IDs"], input[aria-label="Favorite IDs"]');
+  }
+
+  console.log("Syncing favorites to Python:", fav_ids, "favBox found:", !!favBox);
 
   if (favBox) {
-    console.log("this is the moment")
-    const gradioAppEl = document.querySelector('gradio-app');
-    if (gradioAppEl && gradioAppEl.send_event) {
-      gradioAppEl.send_event('update_favorites', { fav_ids: Array.from(favorites.keys()) });
-    }
-
+    // update the DOM value & dispatch an input event so Gradio notices the change
+    favBox.value = fav_ids;
+    favBox.dispatchEvent(new Event('input', { bubbles: true }));
+  } else {
+    console.warn("⚠️ favBox not found. The hidden textbox may be rendered in a shadow DOM or not yet created.");
   }
 }
+
 
 
 // ---------- Click Handler ----------
