@@ -13,7 +13,7 @@ df["authors"] = df["authors"].apply(lambda x: ast.literal_eval(x) if isinstance(
 df["genres"] = df["genres"].apply(lambda x: ast.literal_eval(x) if isinstance(x, str) else x)
 
 embeddings = np.load("book_embeddings.npy")
-df['embedding']=list(embeddings)
+df['embedding'] = list(embeddings)
 
 BOOKS_PER_LOAD = 12
 BOOKS_PER_REC = 100
@@ -29,7 +29,7 @@ def create_book_card_html(book):
          data-img="{book['image_url']}" 
          data-desc="{book.get('description','No description available.')}">
         <img src="{book['image_url']}" 
-             onerror="this.src='https://via.placeholder.com/120x180/667eea/white?text=No+Image'">
+             onerror="this.src='https://via.placeholder.com/150x200/667eea/white?text=No+Image'">
         <div class='book-title'>{book['title']}</div>
         <div class='book-authors'>by {', '.join(book['authors'])}</div>
         <button class='fav-btn' title='Add to Favorites'>Add to Fav</button>
@@ -42,13 +42,19 @@ def build_books_grid_html(books_df):
     cards_html = [create_book_card_html(book) for _, book in books_df.iterrows()]
     return f"<div class='books-grid'>{''.join(cards_html)}</div>"
 
+def shuffle_random_books():
+    """Shuffle and return new random books"""
+    random_books = df.sample(frac=1).reset_index(drop=True)
+    first_batch = random_books.head(BOOKS_PER_LOAD)
+    html = build_books_grid_html(first_batch)
+    has_more = len(random_books) > BOOKS_PER_LOAD
+    return random_books, html, pd.DataFrame(), 1, gr.update(visible=has_more)
+
 # ---------- Recommendation System ----------
 def get_recommendations(favorite_ids):
-    print("get recs is called",favorite_ids)
     if not favorite_ids:
         return pd.DataFrame()
     
-    # Get favorite book embeddings
     fav_embeddings = []
     valid_fav_ids = []
     
@@ -61,31 +67,42 @@ def get_recommendations(favorite_ids):
     if not fav_embeddings:
         return pd.DataFrame()
     
-    # Calculate average embedding of favorites
     avg_fav_embedding = np.mean(fav_embeddings, axis=0).reshape(1, -1)
-    
-    # Calculate cosine similarity with all books
     all_embeddings = np.array(df['embedding'].tolist())
     similarities = cosine_similarity(avg_fav_embedding, all_embeddings)[0]
     
-    # Create similarity scores dataframe
-    sim_df = pd.DataFrame({
-        'id': df['id'],
-        'similarity': similarities
-    })
-    
-    # Remove favorite books from recommendations
+    sim_df = pd.DataFrame({'id': df['id'], 'similarity': similarities})
     sim_df = sim_df[~sim_df['id'].isin(valid_fav_ids)]
-    
-    # Get top recommendations
     top_recs = sim_df.nlargest(BOOKS_PER_REC, 'similarity')
-    
-    # Merge with book data
     recommendations = pd.merge(top_recs, df, on='id', how='left')
     
     return recommendations
 
-
+def refresh_recommendations_with_favorites(favorite_ids_js):
+    try:
+        if isinstance(favorite_ids_js, str):
+            favorite_ids = json.loads(favorite_ids_js)
+        elif isinstance(favorite_ids_js, (list, tuple)):
+            favorite_ids = list(favorite_ids_js)
+        else:
+            favorite_ids = []
+        
+        favorite_ids = [str(x) for x in favorite_ids if x]
+        
+        if not favorite_ids:
+            return gr.update(value="<div class='no-books'>Add some favorites first!</div>"), pd.DataFrame(), 0, gr.update(visible=False)
+        
+        recommendations = get_recommendations(favorite_ids)
+        if recommendations.empty:
+            return gr.update(value="<div class='no-books'>No recommendations found for your favorites.</div>"), pd.DataFrame(), 0, gr.update(visible=False)
+        
+        first_batch = recommendations.head(BOOKS_PER_LOAD)
+        html = build_books_grid_html(first_batch)
+        has_more = len(recommendations) > BOOKS_PER_LOAD
+        
+        return html, recommendations, 1, gr.update(visible=has_more)
+    except Exception as e:
+        return gr.update(value="<div class='no-books'>Error generating recommendations</div>"), pd.DataFrame(), 0, gr.update(visible=False)
 
 def load_more_recommendations(recs_state, recs_page_state):
     if recs_state is None or recs_state.empty:
@@ -98,10 +115,8 @@ def load_more_recommendations(recs_state, recs_page_state):
     if new_books.empty:
         return gr.update(), recs_page_state, gr.update(visible=False)
     
-    # Get all books loaded so far
     all_loaded = recs_state.iloc[:end]
     html = build_books_grid_html(all_loaded)
-    
     has_more = end < len(recs_state)
     return html, recs_page_state + 1, gr.update(visible=has_more)
 
@@ -111,7 +126,6 @@ def search_books(query, search_results_state, search_page_state):
         return gr.update(), gr.update(visible=False), pd.DataFrame(), 0, gr.update(visible=False)
     
     query = query.lower().strip()
-    # Search across all fields
     title_mask = df['title'].str.lower().str.contains(query, na=False)
     author_mask = df['authors'].apply(lambda authors: any(query in author.lower() for author in authors))
     genre_mask = df['genres'].apply(lambda genres: any(query in genre.lower() for genre in genres))
@@ -119,10 +133,8 @@ def search_books(query, search_results_state, search_page_state):
     combined_mask = title_mask | author_mask | genre_mask 
     results = df[combined_mask]
     
-    # Load first batch
     first_batch = results.head(BOOKS_PER_LOAD)
     html = build_books_grid_html(first_batch)
-    
     has_more = len(results) > BOOKS_PER_LOAD
     return html, gr.update(visible=True), results, 1, gr.update(visible=has_more)
 
@@ -137,19 +149,68 @@ def load_more_search(search_results_state, search_page_state):
     if new_books.empty:
         return gr.update(), search_page_state, gr.update(visible=False)
     
-    # Get all books loaded so far
     all_loaded = search_results_state.iloc[:end]
     html = build_books_grid_html(all_loaded)
-    
     has_more = end < len(search_results_state)
     return html, search_page_state + 1, gr.update(visible=has_more)
 
 def clear_search(random_loaded_state):
-    # Reset to random books
     first_batch = random_loaded_state.head(BOOKS_PER_LOAD)
     html = build_books_grid_html(first_batch)
     has_more = len(random_loaded_state) > BOOKS_PER_LOAD
     return gr.update(value=""), html, gr.update(visible=False), pd.DataFrame(), 0, gr.update(visible=has_more)
+
+# ---------- Load More Logic ----------
+def load_more(loaded_books, display_books, page_idx):
+    start = page_idx * BOOKS_PER_LOAD
+    end = start + BOOKS_PER_LOAD
+    new_books = loaded_books.iloc[start:end]
+    if display_books is None or display_books.empty:
+        display_books = pd.DataFrame()
+    if new_books.empty:
+        combined = display_books
+        html = build_books_grid_html(combined)
+        return combined, gr.update(value=html), page_idx, gr.update(visible=False)
+    combined = pd.concat([display_books, new_books], ignore_index=True)
+    html = build_books_grid_html(combined)
+    has_more = end < len(loaded_books)
+    return combined, gr.update(value=html), page_idx + 1, gr.update(visible=has_more)
+
+def load_more_combined(random_loaded_state, random_display_state, random_page_state, search_results_state, search_page_state):
+    if search_results_state is not None and not search_results_state.empty:
+        start = search_page_state * BOOKS_PER_LOAD
+        end = start + BOOKS_PER_LOAD
+        new_books = search_results_state.iloc[start:end]
+        
+        if new_books.empty:
+            combined = search_results_state.iloc[:start]
+            html = build_books_grid_html(combined)
+            return html, random_display_state, random_page_state, gr.update(visible=False), search_page_state
+        
+        all_loaded = search_results_state.iloc[:end]
+        html = build_books_grid_html(all_loaded)
+        has_more = end < len(search_results_state)
+        return html, random_display_state, random_page_state, gr.update(visible=has_more), search_page_state + 1
+    else:
+        start = random_page_state * BOOKS_PER_LOAD
+        end = start + BOOKS_PER_LOAD
+        new_books = random_loaded_state.iloc[start:end]
+        
+        if random_display_state is None or random_display_state.empty:
+            random_display_state = pd.DataFrame()
+        
+        if new_books.empty:
+            combined = random_display_state
+            html = build_books_grid_html(combined)
+            return html, combined, random_page_state, gr.update(visible=False), search_page_state
+        
+        combined = pd.concat([random_display_state, new_books], ignore_index=True)
+        html = build_books_grid_html(combined)
+        has_more = end < len(random_loaded_state)
+        return html, combined, random_page_state + 1, gr.update(visible=has_more), search_page_state
+
+def initial_load(loaded_books):
+    return load_more(loaded_books, pd.DataFrame(), 0)
 
 # ---------- Gradio UI ----------
 with gr.Blocks(css="""
@@ -160,75 +221,49 @@ with gr.Blocks(css="""
 
 /* ---------- Fixed Scroll Sections ---------- */
 .scroll-section { max-height: 700px; overflow-y: auto; border-radius: 8px; padding: 12px; margin-bottom: 20px; background:#1b1b1e; }
-.section-header { font-size:20px; font-weight:bold; margin-bottom:12px; color:#fff; border-bottom:2px solid #667eea; padding-bottom:6px; }
+.section-header { font-size:20px; font-weight:bold; margin-bottom:12px; color:#fff; border-bottom:2px solid #667eea; padding-bottom:6px; display:flex; justify-content:space-between; align-items:center; }
 
 /* ---------- Books Grid ---------- */
-.books-grid {
-    display: grid;
-    grid-template-columns: repeat(6, 1fr); /* 6 columns per row */
-    gap: 16px;
-}
-.book-card { background:#1b1b1e; border-radius:8px; padding:8px; box-shadow:0 0 10px rgba(255,255,255,0.05); cursor:pointer; text-align:center; transition:all 0.25s ease; position:relative; border:1px solid #2d2d2d; }
+.books-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 16px; }
+.book-card { background:#1b1b1e; border-radius:12px; padding:12px; box-shadow:0 0 10px rgba(255,255,255,0.05); cursor:pointer; text-align:center; transition:all 0.25s ease; position:relative; border:1px solid #2d2d2d; display:flex; flex-direction:column; height:100%; }
 .book-card:hover { transform:translateY(-4px); box-shadow:0 0 18px rgba(120,180,255,0.35); }
-.book-card img { width:100%; height:180px; object-fit:cover; border-radius:6px; margin-bottom:8px; }
-.book-title { font-size:13px; font-weight:600; color:#fff; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
-.book-authors { font-size:11px; color:#9ba1b0; overflow:hidden; display:-webkit-box; -webkit-line-clamp:1; -webkit-box-orient:vertical; }
+.book-card img { width:100%; height:200px; object-fit:cover; border-radius:8px; margin-bottom:10px; flex-shrink:0; }
+.book-title { font-size:13px; font-weight:600; color:#fff; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; line-height:1.3; margin-bottom:4px; flex-grow:1; }
+.book-authors { font-size:11px; color:#9ba1b0; overflow:hidden; display:-webkit-box; -webkit-line-clamp:1; -webkit-box-orient:vertical; margin-bottom:8px; }
 
 /* ---------- Buttons ---------- */
-.fav-btn { font-size:11px; margin-top:6px; padding:4px 8px; border:none; border-radius:4px; cursor:pointer; background:linear-gradient(90deg,#3a3f47,#4f5460); color:#fff; transition:all 0.2s ease; }
+.fav-btn { font-size:11px; padding:6px 10px; border:none; border-radius:6px; cursor:pointer; background:linear-gradient(90deg,#3a3f47,#4f5460); color:#fff; transition:all 0.2s ease; width:100%; }
 .fav-btn:hover { background:linear-gradient(90deg,#5a60ff,#3b8dff); }
 .fav-btn.fav-active { background:linear-gradient(90deg,#ffb800,#ff8800); color:#000; }
-.load-more-btn { width:100%; padding:10px; background:#667eea; color:#fff; border:none; border-radius:6px; cursor:pointer; margin-top:10px; font-weight:bold; }
+.load-more-btn { width:100%; padding:12px; background:#667eea; color:#fff; border:none; border-radius:8px; cursor:pointer; margin-top:12px; font-weight:bold; font-size:14px; }
 .load-more-btn:hover { background:#5a6fd8; }
 .load-more-btn:disabled { background:#555; cursor:not-allowed; }
+.shuffle-btn { background:#8e44ad; padding:8px 16px; border:none; border-radius:6px; cursor:pointer; color:white; font-weight:bold; font-size:12px; }
+.shuffle-btn:hover { background:#9b59b6; }
 
-/* ---------- Refresh Button ---------- */
-.refresh-row {
-    display: flex;
-    gap: 10px;
-    margin-top: 10px;
-}
+/* ---------- Button Rows ---------- */
+.button-row { display: flex; gap: 10px; margin-top: 10px; }
+.refresh-row { display: flex; gap: 10px; margin-top: 10px; }
 
 /* ---------- Detail Overlay ---------- */
 #detail-overlay { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:1000; backdrop-filter:blur(6px); }
-#detail-box { position:absolute; background:#1b1b1e; border-radius:10px; padding:20px; max-width:520px; box-shadow:0 8px 25px rgba(0,0,0,0.6); color:#fff; border:1px solid #2a2a2a; }
-#detail-close { position:absolute; top:8px; right:12px; cursor:pointer; font-size:20px; font-weight:bold; color:#ccc; }
+#detail-box { position:absolute; background:#1b1b1e; border-radius:12px; padding:20px; max-width:520px; box-shadow:0 8px 25px rgba(0,0,0,0.6); color:#fff; border:1px solid #2a2a2a; }
+#detail-close { position:absolute; top:12px; right:16px; cursor:pointer; font-size:24px; font-weight:bold; color:#ccc; }
 #detail-close:hover { color:#fff; }
 #detail-content { line-height:1.6; font-size:14px; color:#fff; }
 
 /* ---------- Description Scroll ---------- */
-.desc-scroll {
-    max-height: 200px;
-    overflow-y: auto;
-    padding-right: 8px;
-    margin-top: 6px;
-    color: #fff;
-    line-height: 1.4;
-}
-
-.desc-scroll::-webkit-scrollbar {
-    width: 6px;
-}
-
-.desc-scroll::-webkit-scrollbar-track {
-    background: #2a2a2a;
-    border-radius: 3px;
-}
-
-.desc-scroll::-webkit-scrollbar-thumb {
-    background: #555;
-    border-radius: 3px;
-}
-
-.desc-scroll::-webkit-scrollbar-thumb:hover {
-    background: #777;
-}
+.desc-scroll { max-height: 200px; overflow-y: auto; padding-right: 8px; margin-top: 6px; color: #fff; line-height: 1.4; }
+.desc-scroll::-webkit-scrollbar { width: 6px; }
+.desc-scroll::-webkit-scrollbar-track { background: #2a2a2a; border-radius: 3px; }
+.desc-scroll::-webkit-scrollbar-thumb { background: #555; border-radius: 3px; }
+.desc-scroll::-webkit-scrollbar-thumb:hover { background: #777; }
 
 /* ---------- Sidebar ---------- */
 .sidebar h2 { color:#fff; margin-bottom:12px; }
 .sidebar p { color:#999; }
-.sidebar-book { display:flex; align-items:center; gap:6px; margin-bottom:10px; }
-.sidebar-book:hover { background:#222; border-radius:6px; padding:4px; transition:0.2s; }
+.sidebar-book { display:flex; align-items:center; gap:8px; margin-bottom:12px; padding:8px; border-radius:8px; transition:0.2s; }
+.sidebar-book:hover { background:#222; }
 
 /* ---------- Scrollbar ---------- */
 .scroll-section::-webkit-scrollbar, .sidebar::-webkit-scrollbar { width:8px; }
@@ -243,6 +278,8 @@ with gr.Blocks(css="""
 .search-btn:hover { background:#5a6fd8; }
 .clear-search { background:#555; color:white; border:none; border-radius:6px; padding:8px 16px; cursor:pointer; margin-top:8px; }
 .clear-search:hover { background:#666; }
+
+.no-books { text-align:center; color:#9ba1b0; font-style:italic; padding:40px; font-size:16px; }
 """) as demo:
 
     with gr.Column(elem_classes="main-content"):
@@ -253,25 +290,27 @@ with gr.Blocks(css="""
             gr.Markdown("### 🔍 Search Books")
             with gr.Row(elem_classes="search-row"):
                 search_input = gr.Textbox(
-                    placeholder="Search by title, author, genre, or description...",
+                    placeholder="Search by title, author, or genre...",
                     show_label=False,
                     elem_classes="search-input"
                 )
                 search_btn = gr.Button("Search", elem_classes="search-btn")
-            
             clear_search_btn = gr.Button("Clear Search", elem_classes="clear-search", visible=False)
     
         # ---------- RANDOM BOOKS SECTION ----------
-        gr.Markdown("🎲 Random Books", elem_classes="section-header")
-        random_loaded_state = gr.State(df.sample(frac=1).reset_index(drop=True))
-        random_display_state = gr.State(pd.DataFrame())
-        random_page_state = gr.State(0)
-
-        search_results_state = gr.State(pd.DataFrame())
-        search_page_state = gr.State(0)
-        
-        with gr.Column(elem_classes="scroll-section"):
-            random_container = gr.HTML()
+        with gr.Column():
+            with gr.Row(elem_classes="section-header"):
+                gr.Markdown("🎲 Random Books")
+                shuffle_btn = gr.Button("🔀 Shuffle", elem_classes="shuffle-btn")
+            
+            random_loaded_state = gr.State(df.sample(frac=1).reset_index(drop=True))
+            random_display_state = gr.State(pd.DataFrame())
+            random_page_state = gr.State(0)
+            search_results_state = gr.State(pd.DataFrame())
+            search_page_state = gr.State(0)
+            
+            with gr.Column(elem_classes="scroll-section"):
+                random_container = gr.HTML()
             random_load_btn = gr.Button("📘 Load More Random Books", elem_classes="load-more-btn")
     
         # ---------- POPULAR BOOKS SECTION ----------
@@ -282,17 +321,12 @@ with gr.Blocks(css="""
     
         with gr.Column(elem_classes="scroll-section"):
             popular_container = gr.HTML()
-            popular_load_btn = gr.Button("📖 Load More Popular Books", elem_classes="load-more-btn")
-
-            
+        popular_load_btn = gr.Button("📖 Load More Popular Books", elem_classes="load-more-btn")
 
         # ---------- RECOMMENDATIONS SECTION ----------
         gr.Markdown("💫 Recommended For You", elem_classes="section-header")
         recs_state = gr.State(pd.DataFrame())
         recs_page_state = gr.State(0)
-        # Add this state variable with your other states
-        
-        # Add this hidden textbox in your UI (after search section)
         favorite_ids_input = gr.Textbox(visible=False, elem_id="favorite-ids-input")
 
         with gr.Column(elem_classes="scroll-section"):
@@ -301,126 +335,16 @@ with gr.Blocks(css="""
                 refresh_recs_btn = gr.Button("🔄 Refresh Recommendations", elem_classes="load-more-btn")
                 recs_load_btn = gr.Button("📚 Load More Recommendations", elem_classes="load-more-btn", visible=False)
 
-        
-        # ---------- LOAD MORE LOGIC ----------
-        def load_more(loaded_books, display_books, page_idx):
-            start = page_idx * BOOKS_PER_LOAD
-            end = start + BOOKS_PER_LOAD
-            new_books = loaded_books.iloc[start:end]
-            if display_books is None or display_books.empty:
-                display_books = pd.DataFrame()
-            if new_books.empty:
-                combined = display_books
-                html = build_books_grid_html(combined)
-                return combined, gr.update(value=html), page_idx, gr.update(visible=False)
-            combined = pd.concat([display_books, new_books], ignore_index=True)
-            html = build_books_grid_html(combined)
-            has_more = end < len(loaded_books)
-            return combined, gr.update(value=html), page_idx + 1, gr.update(visible=has_more)
-
-        def load_more_combined(random_loaded_state, random_display_state, random_page_state, 
-                             search_results_state, search_page_state):
-            # Check if we're in search mode
-            if search_results_state is not None and not search_results_state.empty:
-                # Load more search results
-                start = search_page_state * BOOKS_PER_LOAD
-                end = start + BOOKS_PER_LOAD
-                new_books = search_results_state.iloc[start:end]
-                
-                if new_books.empty:
-                    combined = search_results_state.iloc[:start]
-                    html = build_books_grid_html(combined)
-                    return html, random_display_state, random_page_state, gr.update(visible=False), search_page_state
-                
-                # Get all books loaded so far
-                all_loaded = search_results_state.iloc[:end]
-                html = build_books_grid_html(all_loaded)
-                
-                has_more = end < len(search_results_state)
-                return html, random_display_state, random_page_state, gr.update(visible=has_more), search_page_state + 1
-            else:
-                # Load more random books
-                start = random_page_state * BOOKS_PER_LOAD
-                end = start + BOOKS_PER_LOAD
-                new_books = random_loaded_state.iloc[start:end]
-                
-                if random_display_state is None or random_display_state.empty:
-                    random_display_state = pd.DataFrame()
-                
-                if new_books.empty:
-                    combined = random_display_state
-                    html = build_books_grid_html(combined)
-                    return html, combined, random_page_state, gr.update(visible=False), search_page_state
-                
-                combined = pd.concat([random_display_state, new_books], ignore_index=True)
-                html = build_books_grid_html(combined)
-                
-                has_more = end < len(random_loaded_state)
-                return html, combined, random_page_state + 1, gr.update(visible=has_more), search_page_state
-
-
-
-
-        def debug_favorites():
-            favorite_ids = favorite_ids_state.value if hasattr(favorite_ids_state, 'value') else []
-            return f"DEBUG: Current favorite IDs: {favorite_ids}"
-
-
-
-        
-        # Add this function for the refresh button
-        def refresh_recommendations_with_favorites(favorite_ids_js):
-            """
-            favorite_ids_js may be:
-              - a JSON string like '["9555","9506"]'  (recommended)
-              - a Python list ['9555','9506']         (possible)
-            This function normalizes and then computes recommendations.
-            """
-            print("DEBUG: raw favorite_ids_js:", favorite_ids_js, type(favorite_ids_js))
-        
-            # Normalize to Python list of strings
-            favorite_ids = []
-            try:
-                if isinstance(favorite_ids_js, str):
-                    # expected path if JS returned JSON string
-                    favorite_ids = json.loads(favorite_ids_js)
-                elif isinstance(favorite_ids_js, (list, tuple)):
-                    favorite_ids = list(favorite_ids_js)
-                else:
-                    # fallback: try to coerce
-                    favorite_ids = []
-            except Exception as e:
-                print("ERROR parsing favorite ids:", e)
-                favorite_ids = []
-        
-            # defensive: remove falsy / non-string items
-            favorite_ids = [str(x) for x in favorite_ids if x]
-        
-            print("DEBUG: parsed favorite_ids ->", favorite_ids)
-        
-            if not favorite_ids:
-                return gr.update(value="<div class='no-books'>Add some favorites first!</div>"), pd.DataFrame(), 0, gr.update(visible=False)
-        
-            # compute recommendations
-            recommendations = get_recommendations(favorite_ids)
-            if recommendations.empty:
-                return gr.update(value="<div class='no-books'>No recommendations found for your favorites.</div>"), pd.DataFrame(), 0, gr.update(visible=False)
-        
-            # first page
-            first_batch = recommendations.head(BOOKS_PER_LOAD)
-            html = build_books_grid_html(first_batch)
-            has_more = len(recommendations) > BOOKS_PER_LOAD
-        
-            # Return: html for container, full recs DataFrame stored in recs_state,
-            # page index (1 means first page already shown), and whether load-more is visible.
-            return html, recommendations, 1, gr.update(visible=has_more)
-
-
         # ---------- EVENT HANDLERS ----------
         random_load_btn.click(
             load_more_combined,
             [random_loaded_state, random_display_state, random_page_state, search_results_state, search_page_state],
             [random_container, random_display_state, random_page_state, random_load_btn, search_page_state]
+        )
+        
+        shuffle_btn.click(
+            shuffle_random_books,
+            outputs=[random_loaded_state, random_container, random_display_state, random_page_state, random_load_btn]
         )
         
         popular_load_btn.click(
@@ -452,14 +376,13 @@ with gr.Blocks(css="""
             [recs_state, recs_page_state],
             [recs_container, recs_page_state, recs_load_btn]
         )
-        # Step 1: JS gets favorites
+        
         refresh_recs_btn.click(
             None,
-            js="() => getFavoritesFromJS()",   # ✅ modern syntax (not _js)
+            js="() => getFavoritesFromJS()",
             outputs=[favorite_ids_input],
         )
         
-        # Step 2: Python uses them
         favorite_ids_input.change(
             refresh_recommendations_with_favorites,
             [favorite_ids_input],
@@ -467,9 +390,6 @@ with gr.Blocks(css="""
         )
 
         # ---------- INITIAL LOAD ----------
-        def initial_load(loaded_books):
-            return load_more(loaded_books, pd.DataFrame(), 0)
-
         demo.load(
             lambda: [
                 *initial_load(random_loaded_state.value),
@@ -501,26 +421,19 @@ const favorites = new Map();
 
 function escapeHtml(str){
   return str ? String(str)
-    .replace(/&/g,'&amp;')
-    .replace(/</g,'&lt;')
-    .replace(/>/g,'&gt;')
-    .replace(/"/g,'&quot;')
-    .replace(/'/g,'&#39;') : "";
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;') : "";
 }
 
-
-// ---------- Sync Favorites to Python ----------
 function syncFavoritesToPython() {
     const favoriteIds = Array.from(favorites.keys());
     const hiddenInput = document.getElementById('favorite-ids-input');
     if (hiddenInput) {
         hiddenInput.value = JSON.stringify(favoriteIds);
-        // Trigger the input event so Gradio detects the change
         hiddenInput.dispatchEvent(new Event('input', { bubbles: true }));
     }
 }
 
-// ---------- Update Sidebar ----------
 function updateFavoritesSidebar(){
   const sidebarList = document.getElementById('favorites-list');
   if(!sidebarList) return;
@@ -534,52 +447,37 @@ function updateFavoritesSidebar(){
   favorites.forEach((book,id)=>{
     html += `
       <div class="sidebar-book" data-id="${id}">
-        <img src="${escapeHtml(book.img)}" 
-             style="width:40px;height:56px;object-fit:cover;border-radius:4px;">
+        <img src="${escapeHtml(book.img)}" style="width:40px;height:56px;object-fit:cover;border-radius:4px;">
         <div style="flex:1;font-size:12px;color:#fff;">
           <strong>${escapeHtml(book.title)}</strong><br>
           <span style="color:#aaa;">${escapeHtml(book.authors)}</span>
         </div>
         <button class="remove-fav-btn" title="Remove from Favorites"
-          style="background:none;border:none;color:#888;cursor:pointer;font-size:14px;">
-          🗑️
-        </button>
+          style="background:none;border:none;color:#888;cursor:pointer;font-size:14px;">🗑️</button>
       </div>`;
   });
   sidebarList.innerHTML = html;
-  
-
-
+  syncFavoritesToPython();
 }
 
-// Add this debug function to check if the hidden input exists
-function checkHiddenInput() {
-    const hiddenInput = document.getElementById('favorite-ids-input');
-    console.log('DEBUG: Hidden input exists?', !!hiddenInput);
-    if (hiddenInput) {
-        console.log('DEBUG: Hidden input value:', hiddenInput.value);
-    }
+function getFavoritesFromJS() {
+  const ids = Array.from(favorites.keys());
+  return JSON.stringify(ids);
 }
+window.getFavoritesFromJS = getFavoritesFromJS;
 
-// Call it when the page loads
-setTimeout(checkHiddenInput, 1000);
-
-// ---------- Click Handler ----------
 document.addEventListener('click', e=>{
-  // --- Remove Favorite from Sidebar ---
   if(e.target.closest('.remove-fav-btn')){
     const parent = e.target.closest('.sidebar-book');
     if(!parent) return;
     const id = parent.dataset.id;
     favorites.delete(id);
     updateFavoritesSidebar();
-    // also un-highlight the corresponding book card
     const cardBtn = document.querySelector(`.book-card[data-id="${id}"] .fav-btn`);
     if(cardBtn) cardBtn.classList.remove('fav-active');
     return;
   }
 
-  // --- Toggle Favorite from Card ---
   const favBtn = e.target.closest('.fav-btn');
   if(favBtn){
     e.stopPropagation();
@@ -599,7 +497,6 @@ document.addEventListener('click', e=>{
     return;
   }
 
-  // --- Book Detail Popup ---
   const card = e.target.closest('.book-card');
   if(!card) return;
   const title = card.dataset.title;
@@ -627,24 +524,12 @@ document.addEventListener('click', e=>{
   if(top + box.offsetHeight > window.innerHeight - 20){ top = window.innerHeight - box.offsetHeight - 20; }
   box.style.left = `${Math.max(left, 10)}px`;
   box.style.top = `${Math.max(top, 10)}px`;
-
   overlay.style.display='block';
-  box.scrollIntoView({ behavior: "smooth", block: "nearest" });
 });
 
-// ---------- Overlay Controls ----------
 closeBtn.addEventListener('click',()=>{overlay.style.display='none';});
 overlay.addEventListener('click',e=>{if(e.target===overlay) overlay.style.display='none';});
 document.addEventListener('keydown',e=>{if(e.key==='Escape') overlay.style.display='none';});
-
-// Return JSON string of IDs (safe, predictable)
-function getFavoritesFromJS() {
-  const ids = Array.from(favorites.keys());       // e.g. ["9555","9506"]
-  console.log("🔁 getFavoritesFromJS ->", ids);
-  return JSON.stringify(ids);                    // send a JSON string to Gradio
-}
-window.getFavoritesFromJS = getFavoritesFromJS;
-
 </script>
 """)
 
