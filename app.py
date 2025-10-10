@@ -382,11 +382,11 @@ with gr.Blocks(css="""
 
             # Refresh button
             recs_refresh_btn.click(
-                lambda fav_ids: refresh_recommendations(fav_ids.split(",") if fav_ids else []),
+                lambda fav_ids: refresh_recommendations([x for x in fav_ids.split(",") if x.strip()]) if fav_ids else refresh_recommendations([]),
                 [fav_ids_box],
                 [recs_container, recs_state, recs_display_state, recs_page_state, recs_load_btn]
             )
-            
+                        
             # Load More button
             recs_load_btn.click(
                 load_more_recommendations,
@@ -491,6 +491,8 @@ function updateFavoritesSidebar(){
 function syncFavoritesToPython() {
   const fav_ids = Array.from(favorites.keys()).join(',');
   const favBox = document.querySelector('textarea[aria-label="Favorite IDs"]');
+  console.log("Syncing favorites to Python:", fav_ids);
+
   if (favBox) {
     favBox.value = fav_ids;
     favBox.dispatchEvent(new Event('input', { bubbles: true }));
