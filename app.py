@@ -1,11 +1,8 @@
-
-
 import ast
 import pandas as pd
 import gradio as gr
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
-import json
 
 # ---------- Load dataset ----------
 df = pd.read_csv("data_mini_books_update.csv")
@@ -49,72 +46,64 @@ def get_recommendations(favorite_ids):
     if not favorite_ids:
         return pd.DataFrame()
     
-    # Get embeddings for favorites
-    fav_embeddings = [df.loc[df['id']==fid, 'embedding'].values[0] for fid in favorite_ids if fid in df['id'].values]
+    # Get favorite book embeddings
+    fav_embeddings = []
+    valid_fav_ids = []
+    
+    for fav_id in favorite_ids:
+        book_data = df[df['id'] == fav_id]
+        if not book_data.empty:
+            fav_embeddings.append(book_data.iloc[0]['embedding'])
+            valid_fav_ids.append(fav_id)
+    
     if not fav_embeddings:
         return pd.DataFrame()
     
-    avg_embedding = np.mean(fav_embeddings, axis=0).reshape(1,-1)
-    all_embeddings = np.array(df['embedding'].tolist())
-    sims = cosine_similarity(avg_embedding, all_embeddings)[0]
+    # Calculate average embedding of favorites
+    avg_fav_embedding = np.mean(fav_embeddings, axis=0).reshape(1, -1)
     
-    sim_df = pd.DataFrame({'id': df['id'], 'similarity': sims})
-    sim_df = sim_df[~sim_df['id'].isin(favorite_ids)]
+    # Calculate cosine similarity with all books
+    all_embeddings = np.array(df['embedding'].tolist())
+    similarities = cosine_similarity(avg_fav_embedding, all_embeddings)[0]
+    
+    # Create similarity scores dataframe
+    sim_df = pd.DataFrame({
+        'id': df['id'],
+        'similarity': similarities
+    })
+    
+    # Remove favorite books from recommendations
+    sim_df = sim_df[~sim_df['id'].isin(valid_fav_ids)]
+    
+    # Get top recommendations
     top_recs = sim_df.nlargest(BOOKS_PER_REC, 'similarity')
     
-    return pd.merge(top_recs, df, on='id', how='left')
+    # Merge with book data
+    recommendations = pd.merge(top_recs, df, on='id', how='left')
+    
+    return recommendations
 
-
-def refresh_recommendations(favorite_ids):
-    if not favorite_ids:
-        return build_books_grid_html(pd.DataFrame()), pd.DataFrame(), 0, gr.update(visible=False)
-    
-    recommendations = get_recommendations(favorite_ids)
-    
-    if recommendations.empty:
-        return build_books_grid_html(pd.DataFrame()), pd.DataFrame(), 0, gr.update(visible=False)
-    
-    # Load first batch
-    first_batch = recommendations.head(BOOKS_PER_LOAD)
-    html = build_books_grid_html(first_batch)
-    
-    has_more = len(recommendations) > BOOKS_PER_LOAD
-    return html, recommendations, 1, gr.update(visible=has_more)
-
-def refresh_recs_button(favorite_ids):
-    print("refresh recs is called",favorite_ids)
-    if not favorite_ids:
-        html = "<div class='no-books'>Add some favorites to get recommendations!</div>"
-        return html, pd.DataFrame(), 0, gr.update(visible=False)
-    
-    recs_df = get_recommendations(favorite_ids)
-    first_batch = recs_df.head(BOOKS_PER_LOAD)
-    html = build_books_grid_html(first_batch)
-    
-    has_more = len(recs_df) > BOOKS_PER_LOAD
-    return html, recs_df, 1, gr.update(visible=has_more)
-
+def refresh_recommendations():
+    # Get favorite IDs from JavaScript (we'll use a simple approach)
+    return build_books_grid_html(pd.DataFrame()), pd.DataFrame(), 0, gr.update(visible=False)
 
 def load_more_recommendations(recs_state, recs_page_state):
-    print("load more recs is called")
     if recs_state is None or recs_state.empty:
-        return build_books_grid_html(pd.DataFrame()), recs_page_state, gr.update(visible=False)
+        return gr.update(), recs_page_state, gr.update(visible=False)
     
     start = recs_page_state * BOOKS_PER_LOAD
     end = start + BOOKS_PER_LOAD
+    new_books = recs_state.iloc[start:end]
+    
+    if new_books.empty:
+        return gr.update(), recs_page_state, gr.update(visible=False)
+    
+    # Get all books loaded so far
     all_loaded = recs_state.iloc[:end]
     html = build_books_grid_html(all_loaded)
     
     has_more = end < len(recs_state)
     return html, recs_page_state + 1, gr.update(visible=has_more)
-
-
-def handle_favorite_ids_change(favorite_ids_json):
-    try:
-        favorite_ids = json.loads(favorite_ids_json) if favorite_ids_json else []
-        return favorite_ids, *refresh_recommendations(favorite_ids)
-    except:
-        return [], build_books_grid_html(pd.DataFrame()), pd.DataFrame(), 0, gr.update(visible=False)
 
 # ---------- Search Functions ----------
 def search_books(query, search_results_state, search_page_state):
@@ -271,9 +260,6 @@ with gr.Blocks(css="""
                 search_btn = gr.Button("Search", elem_classes="search-btn")
             
             clear_search_btn = gr.Button("Clear Search", elem_classes="clear-search", visible=False)
-        
-        # Hidden input for favorite IDs
-        favorite_ids_input = gr.Textbox(visible=False, elem_id="favorite-ids-input")
     
         # ---------- RANDOM BOOKS SECTION ----------
         gr.Markdown("🎲 Random Books", elem_classes="section-header")
@@ -283,7 +269,6 @@ with gr.Blocks(css="""
 
         search_results_state = gr.State(pd.DataFrame())
         search_page_state = gr.State(0)
-        favorite_ids_state = gr.State([])
         
         with gr.Column(elem_classes="scroll-section"):
             random_container = gr.HTML()
@@ -302,13 +287,12 @@ with gr.Blocks(css="""
         # ---------- RECOMMENDATIONS SECTION ----------
         gr.Markdown("💫 Recommended For You", elem_classes="section-header")
         recs_state = gr.State(pd.DataFrame())
-        recs_display_state = gr.State(pd.DataFrame())
         recs_page_state = gr.State(0)
 
         with gr.Column(elem_classes="scroll-section"):
             recs_container = gr.HTML("<div class='no-books'>Add some favorites to get recommendations!</div>")
             with gr.Row(elem_classes="refresh-row"):
-                refresh_recs_btn = gr.Button("🔄 Refresh Recommendations", elem_id="refresh-recs-btn", elem_classes="load-more-btn")
+                refresh_recs_btn = gr.Button("🔄 Refresh Recommendations", elem_classes="load-more-btn")
                 recs_load_btn = gr.Button("📚 Load More Recommendations", elem_classes="load-more-btn", visible=False)
         
         # ---------- LOAD MORE LOGIC ----------
@@ -397,28 +381,16 @@ with gr.Blocks(css="""
             [random_loaded_state],
             [search_input, random_container, clear_search_btn, search_results_state, search_page_state, random_load_btn]
         )
-        
 
-        # Refresh button triggers recommendations
-        refresh_recs_btn.click(
-            refresh_recs_button,
-            [favorite_ids_state],
-            [recs_container, recs_state, recs_page_state, recs_load_btn]
-        )
-        
-        # Load more button
         recs_load_btn.click(
             load_more_recommendations,
             [recs_state, recs_page_state],
             [recs_container, recs_page_state, recs_load_btn]
         )
 
-
-        # Handle favorite IDs changes from JavaScript
-        favorite_ids_input.change(
-            handle_favorite_ids_change,
-            [favorite_ids_input],
-            [favorite_ids_state, recs_container, recs_state, recs_page_state, recs_load_btn]
+        refresh_recs_btn.click(
+            refresh_recommendations,
+            outputs=[recs_container, recs_state, recs_page_state, recs_load_btn]
         )
 
         # ---------- INITIAL LOAD ----------
@@ -441,7 +413,7 @@ with gr.Blocks(css="""
             favorites_container = gr.HTML("<div id='favorites-list'><p>No favorites yet.</p></div>")
 
     # ---------- JAVASCRIPT ----------
-gr.HTML("""
+    gr.HTML("""
 <div id="detail-overlay">
   <div id="detail-box">
     <span id="detail-close">&times;</span>
@@ -467,10 +439,12 @@ function escapeHtml(str){
 function updateFavoritesSidebar(){
   const sidebarList = document.getElementById('favorites-list');
   if(!sidebarList) return;
+
   if(favorites.size === 0){
     sidebarList.innerHTML = "<p>No favorites yet.</p>";
     return;
   }
+
   let html = "";
   favorites.forEach((book,id)=>{
     html += `
@@ -490,31 +464,22 @@ function updateFavoritesSidebar(){
   sidebarList.innerHTML = html;
 }
 
-// ---------- Push Favorites to Python (only on refresh) ----------
-function pushFavoritesToPython(){
-    const favoriteIds = Array.from(favorites.keys());
-    const hiddenInput = document.getElementById('favorite-ids-input');
-    if(hiddenInput){
-        hiddenInput.value = JSON.stringify(favoriteIds);
-        hiddenInput.dispatchEvent(new Event('input', { bubbles: true }));
-    }
-}
-
 // ---------- Click Handler ----------
 document.addEventListener('click', e=>{
-  // Remove favorite from sidebar
+  // --- Remove Favorite from Sidebar ---
   if(e.target.closest('.remove-fav-btn')){
     const parent = e.target.closest('.sidebar-book');
     if(!parent) return;
     const id = parent.dataset.id;
     favorites.delete(id);
     updateFavoritesSidebar();
+    // also un-highlight the corresponding book card
     const cardBtn = document.querySelector(`.book-card[data-id="${id}"] .fav-btn`);
     if(cardBtn) cardBtn.classList.remove('fav-active');
     return;
   }
 
-  // Toggle favorite from card
+  // --- Toggle Favorite from Card ---
   const favBtn = e.target.closest('.fav-btn');
   if(favBtn){
     e.stopPropagation();
@@ -523,19 +488,18 @@ document.addEventListener('click', e=>{
     const title = card.dataset.title;
     const authors = card.dataset.authors;
     const img = card.dataset.img;
-
     if(favorites.has(bookId)){
       favorites.delete(bookId);
       favBtn.classList.remove('fav-active');
     } else {
-      favorites.set(bookId, {title, authors, img});
+      favorites.set(bookId,{title,authors,img});
       favBtn.classList.add('fav-active');
     }
     updateFavoritesSidebar();
     return;
   }
 
-  // Book Detail Popup
+  // --- Book Detail Popup ---
   const card = e.target.closest('.book-card');
   if(!card) return;
   const title = card.dataset.title;
@@ -563,6 +527,7 @@ document.addEventListener('click', e=>{
   if(top + box.offsetHeight > window.innerHeight - 20){ top = window.innerHeight - box.offsetHeight - 20; }
   box.style.left = `${Math.max(left, 10)}px`;
   box.style.top = `${Math.max(top, 10)}px`;
+
   overlay.style.display='block';
   box.scrollIntoView({ behavior: "smooth", block: "nearest" });
 });
@@ -571,13 +536,7 @@ document.addEventListener('click', e=>{
 closeBtn.addEventListener('click',()=>{overlay.style.display='none';});
 overlay.addEventListener('click',e=>{if(e.target===overlay) overlay.style.display='none';});
 document.addEventListener('keydown',e=>{if(e.key==='Escape') overlay.style.display='none';});
-
-// ---------- Refresh Recommendations Button ----------
-document.getElementById('refresh-recs-btn').addEventListener('click', ()=>{
-    pushFavoritesToPython();
-});
 </script>
 """)
-
 
 demo.launch()
