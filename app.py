@@ -381,11 +381,13 @@ with gr.Blocks(css="""
 
             # Refresh button
             recs_refresh_btn.click(
-                lambda fav_ids: refresh_recommendations(fav_ids.split(",") if fav_ids else []),
+                lambda fav_ids: refresh_recommendations(
+                    [fid.strip() for fid in fav_ids.split(",") if fid.strip()]
+                ),
                 [fav_ids_box],
                 [recs_container, recs_state, recs_display_state, recs_page_state, recs_load_btn]
             )
-            
+
             # Load More button
             recs_load_btn.click(
                 load_more_recommendations,
@@ -493,6 +495,8 @@ function syncFavoritesToPython() {
   if (favBox) {
     favBox.value = fav_ids;
     favBox.dispatchEvent(new Event('input', { bubbles: true }));
+    favBox.dispatchEvent(new Event('change', { bubbles: true }));
+
   }
 }
 
