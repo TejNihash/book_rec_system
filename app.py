@@ -43,6 +43,7 @@ def build_books_grid_html(books_df):
 
 # ---------- Recommendation System ----------
 def get_recommendations(favorite_ids):
+    print("get recs is called",favorite_ids)
     if not favorite_ids:
         return pd.DataFrame()
     
@@ -85,6 +86,7 @@ def get_recommendations(favorite_ids):
 
 def refresh_recommendations():
     # Get favorite IDs from JavaScript (we'll use a simple approach)
+    print("refresh recs is called")
     return build_books_grid_html(pd.DataFrame()), pd.DataFrame(), 0, gr.update(visible=False)
 
 def load_more_recommendations(recs_state, recs_page_state):
