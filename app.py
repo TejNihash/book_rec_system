@@ -51,6 +51,83 @@ def build_books_grid_html(books_df):
     return f"<div class='books-grid'>{''.join(cards_html)}</div>"
 
 
+# ---------- Recommendation System ----------
+def get_recommendations(favorite_ids):
+    if not favorite_ids:
+        return pd.DataFrame()
+    
+    # Get favorite book embeddings
+    fav_embeddings = []
+    valid_fav_ids = []
+    
+    for fav_id in favorite_ids:
+        book_data = df[df['id'] == fav_id]
+        if not book_data.empty:
+            fav_embeddings.append(book_data.iloc[0]['embedding'])
+            valid_fav_ids.append(fav_id)
+    
+    if not fav_embeddings:
+        return pd.DataFrame()
+    
+    # Calculate average embedding of favorites
+    avg_fav_embedding = np.mean(fav_embeddings, axis=0).reshape(1, -1)
+    
+    # Calculate cosine similarity with all books
+    all_embeddings = np.array(df['embedding'].tolist())
+    similarities = cosine_similarity(avg_fav_embedding, all_embeddings)[0]
+    
+    # Create similarity scores dataframe
+    sim_df = pd.DataFrame({
+        'id': df['id'],
+        'similarity': similarities
+    })
+    
+    # Remove favorite books from recommendations
+    sim_df = sim_df[~sim_df['id'].isin(valid_fav_ids)]
+    
+    # Get top recommendations
+    top_recs = sim_df.nlargest(BOOKS_PER_REC, 'similarity')
+    
+    # Merge with book data
+    recommendations = pd.merge(top_recs, df, on='id', how='left')
+    
+    return recommendations
+
+def refresh_recommendations(favorite_ids):
+    if not favorite_ids:
+        return build_books_grid_html(pd.DataFrame()), pd.DataFrame(), 0, gr.update(visible=False)
+    
+    recommendations = get_recommendations(favorite_ids)
+    
+    if recommendations.empty:
+        return build_books_grid_html(pd.DataFrame()), pd.DataFrame(), 0, gr.update(visible=False)
+    
+    # Load first batch
+    first_batch = recommendations.head(BOOKS_PER_LOAD)
+    html = build_books_grid_html(first_batch)
+    
+    has_more = len(recommendations) > BOOKS_PER_LOAD
+    return html, recommendations, 1, gr.update(visible=has_more)
+
+def load_more_recommendations(recs_state, recs_page_state):
+    if recs_state is None or recs_state.empty:
+        return gr.update(), recs_page_state, gr.update(visible=False)
+    
+    start = recs_page_state * BOOKS_PER_LOAD
+    end = start + BOOKS_PER_LOAD
+    new_books = recs_state.iloc[start:end]
+    
+    if new_books.empty:
+        return gr.update(), recs_page_state, gr.update(visible=False)
+    
+    # Get all books loaded so far
+    all_loaded = recs_state.iloc[:end]
+    html = build_books_grid_html(all_loaded)
+    
+    has_more = end < len(recs_state)
+    return html, recs_page_state + 1, gr.update(visible=has_more)
+
+
 # ---------- Search Functions ----------
 def search_books(query, search_results_state, search_page_state):
     if not query.strip():
@@ -231,6 +308,15 @@ with gr.Blocks(css="""
             popular_load_btn = gr.Button("📖 Load More Popular Books", elem_classes="load-more-btn")
 
 
+        # ---------- Recommendations Section ----------
+        gr.Markdown("💫 Recommended For You", elem_classes="section-header")
+        recs_state = gr.State(pd.DataFrame())
+        recs_display_state = gr.State(pd.DataFrame())
+        recs_page_state = gr.State(0)
+
+        with gr.Column(elem_classes="scroll-section"):
+            recs_container = gr.HTML("<div class='no-books'>Add some favorites to get recommendations!</div>")
+            recs_load_btn = gr.Button("📚 Load More Recommendations", elem_classes="load-more-btn", visible=False)
 
 
 
@@ -328,6 +414,18 @@ with gr.Blocks(css="""
                 [random_loaded_state],
                 [search_input, random_container, clear_search_btn, search_results_state, search_page_state, random_load_btn]
             )
+
+
+                        # ---------- Recommendations Logic ----------
+            def update_favorites(favorite_ids):
+                return refresh_recommendations(favorite_ids)
+            
+            recs_load_btn.click(
+                load_more_recommendations,
+                [recs_state, recs_page_state],
+                [recs_container, recs_page_state, recs_load_btn]
+            )
+            
             # ---------- Initial Load ----------
             def initial_load(loaded_books):
                 return load_more(loaded_books, pd.DataFrame(), 0)
@@ -402,6 +500,56 @@ function updateFavoritesSidebar(){
 }
 
 
+// ----------------------------------------------------------------------
+
+// Function to sync favorites to Python for recommendations
+function syncFavoritesToPython() {
+    const favoriteIds = Array.from(favorites.keys());
+    // Trigger Python function with favorite IDs
+    if (window.gradio_api) {
+        window.gradio_api('/update_favorites', {
+            data: [favoriteIds]
+        });
+    }
+}
+
+// Call this whenever favorites change
+function updateFavoritesSidebar(){
+  const sidebarList = document.getElementById('favorites-list');
+  if(!sidebarList) return;
+
+  if(favorites.size === 0){
+    sidebarList.innerHTML = "<p>No favorites yet.</p>";
+    return;
+  }
+
+  let html = "";
+  favorites.forEach((book,id)=>{
+    html += `
+      <div class="sidebar-book" data-id="${id}">
+        <img src="${escapeHtml(book.img)}" 
+             style="width:40px;height:56px;object-fit:cover;border-radius:4px;">
+        <div style="flex:1;font-size:12px;color:#fff;">
+          <strong>${escapeHtml(book.title)}</strong><br>
+          <span style="color:#aaa;">${escapeHtml(book.authors)}</span>
+        </div>
+        <button class="remove-fav-btn" title="Remove from Favorites"
+          style="background:none;border:none;color:#888;cursor:pointer;font-size:14px;">
+          🗑️
+        </button>
+      </div>`;
+  });
+  sidebarList.innerHTML = html;
+  
+  // Sync to Python for recommendations
+  syncFavoritesToPython();
+}
+
+
+// ----------------------------------------------------------------------
+// ---------- Favorites Update Event ----------
+const updateFavoritesEvent = new Event('favorites_updated');
+
 // ---------- Click Handler ----------
 document.addEventListener('click', e=>{
   // --- Remove Favorite from Sidebar ---
@@ -414,6 +562,9 @@ document.addEventListener('click', e=>{
     // also un-highlight the corresponding book card
     const cardBtn = document.querySelector(`.book-card[data-id="${id}"] .fav-btn`);
     if(cardBtn) cardBtn.classList.remove('fav-active');
+    
+    // Trigger recommendations update
+    document.dispatchEvent(updateFavoritesEvent);
     return;
   }
 
@@ -434,10 +585,24 @@ document.addEventListener('click', e=>{
       favBtn.classList.add('fav-active');
     }
     updateFavoritesSidebar();
-    syncFavoritesToPython();   // 👈 added this line for storing ids for recs
-
+    
+    // Trigger recommendations update
+    document.dispatchEvent(updateFavoritesEvent);
     return;
   }
+
+  // ---------- Update Recommendations when Favorites Change ----------
+document.addEventListener('favorites_updated', function() {
+    const favoriteIds = Array.from(favorites.keys());
+    // This will be connected to Python function
+    if (window.gradio_app) {
+        // Trigger the Python update_favorites function
+        const event = new CustomEvent('update_favorites', {
+            detail: { data: [favoriteIds] }
+        });
+        document.dispatchEvent(event);
+    }
+});
 
   // --- Book Detail Popup ---
   const card = e.target.closest('.book-card');
