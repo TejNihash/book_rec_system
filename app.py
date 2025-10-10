@@ -19,6 +19,7 @@ df['embedding']=list(embeddings)
 
 
 BOOKS_PER_LOAD = 12
+BOOKS_PER_REC = 100
 
 # ---------- Helpers ----------
 
@@ -41,6 +42,7 @@ def get_similar_books(fav_ids, top_k=100):
     return recs
 
 def refresh_recommendations(fav_ids):
+    print("Received favorites:", fav_ids)  # debug
     if not fav_ids:
         html = "<div class='no-books'>Add some favorites to see recommendations!</div>"
         return html, pd.DataFrame(), pd.DataFrame(), 0, gr.update(visible=False)
@@ -339,11 +341,12 @@ with gr.Blocks(css="""
             # ------- update recommendations logic -------
 
             def update_recommendations(fav_ids):
+                
                 if not fav_ids:
-                    html = "<div class='no-books'>Add some favorites to see recommendations!</div>"
+                    html = "<div class='no-books'>Add some favorites to seeeee recommendations!</div>"
                     return html, gr.update(visible=False)
             
-                rec_df = get_similar_books(fav_ids, top_k=BOOKS_PER_LOAD)
+                rec_df = get_similar_books(fav_ids, top_k=BOOKS_PER_REC)
                 html = build_books_grid_html(rec_df)
                 return html, gr.update(visible=True)
 
@@ -382,10 +385,13 @@ with gr.Blocks(css="""
 
             # Refresh button
             recs_refresh_btn.click(
-                lambda fav_ids: refresh_recommendations([x for x in fav_ids.split(",") if x.strip()]) if fav_ids else refresh_recommendations([]),
+                lambda fav_ids: refresh_recommendations(
+                    [x.strip() for x in fav_ids.split(",") if x.strip()]
+                ),
                 [fav_ids_box],
                 [recs_container, recs_state, recs_display_state, recs_page_state, recs_load_btn]
             )
+
                         
             # Load More button
             recs_load_btn.click(
