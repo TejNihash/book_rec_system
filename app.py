@@ -365,7 +365,6 @@ with gr.Blocks(css="""
             favorite_ids = favorite_ids_state.value if hasattr(favorite_ids_state, 'value') else []
             return f"DEBUG: Current favorite IDs: {favorite_ids}"
 
-        debug_btn.click(debug_favorites, outputs=[recs_container])
 
 
         
