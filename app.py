@@ -507,6 +507,7 @@ function updateFavoritesSidebar(){
 function syncFavoritesToPython() {
     const favoriteIds = Array.from(favorites.keys());
     const hiddenInput = document.getElementById('favorite-ids-input');
+    console.log("what we got",favoriteIds)
     if (hiddenInput) {
         hiddenInput.value = JSON.stringify(favoriteIds);
         hiddenInput.dispatchEvent(new Event('input', { bubbles: true }));
