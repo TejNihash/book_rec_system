@@ -108,26 +108,21 @@ def refresh_recs_button(favorite_ids):
 
 def load_more_recommendations(recs_state, recs_page_state):
     if recs_state is None or recs_state.empty:
-        return build_books_grid_html(pd.DataFrame()), recs_page_state, gr.update(visible=False)
+        return gr.update(), recs_page_state, gr.update(visible=False)
     
     start = recs_page_state * BOOKS_PER_LOAD
     end = start + BOOKS_PER_LOAD
     new_books = recs_state.iloc[start:end]
+    
+    if new_books.empty:
+        return gr.update(), recs_page_state, gr.update(visible=False)
+    
+    # Get all books loaded so far
     all_loaded = recs_state.iloc[:end]
     html = build_books_grid_html(all_loaded)
+    
     has_more = end < len(recs_state)
     return html, recs_page_state + 1, gr.update(visible=has_more)
-
-
-def handle_favorite_ids_change(favorite_ids_json):
-    try:
-        favorite_ids = list(set(json.loads(favorite_ids_json))) if favorite_ids_json else []
-        html, recs_df, page, btn_update = refresh_recommendations(favorite_ids)
-        return favorite_ids, html, recs_df, page, btn_update
-    except Exception as e:
-        print("Error in handle_favorite_ids_change:", e)
-        return [], build_books_grid_html(pd.DataFrame()), pd.DataFrame(), 0, gr.update(visible=False)
-
 
 # ---------- Search Functions ----------
 def search_books(query, search_results_state, search_page_state):
@@ -284,9 +279,6 @@ with gr.Blocks(css="""
                 search_btn = gr.Button("Search", elem_classes="search-btn")
             
             clear_search_btn = gr.Button("Clear Search", elem_classes="clear-search", visible=False)
-        
-        # Hidden input for favorite IDs
-        favorite_ids_input = gr.Textbox(visible=False, elem_id="favorite-ids-input")
     
         # ---------- RANDOM BOOKS SECTION ----------
         gr.Markdown("🎲 Random Books", elem_classes="section-header")
@@ -315,7 +307,6 @@ with gr.Blocks(css="""
         # ---------- RECOMMENDATIONS SECTION ----------
         gr.Markdown("💫 Recommended For You", elem_classes="section-header")
         recs_state = gr.State(pd.DataFrame())
-        recs_display_state = gr.State(pd.DataFrame())
         recs_page_state = gr.State(0)
 
         with gr.Column(elem_classes="scroll-section"):
@@ -410,24 +401,17 @@ with gr.Blocks(css="""
             [random_loaded_state],
             [search_input, random_container, clear_search_btn, search_results_state, search_page_state, random_load_btn]
         )
+
         recs_load_btn.click(
             load_more_recommendations,
             [recs_state, recs_page_state],
             [recs_container, recs_page_state, recs_load_btn]
         )
 
-
         refresh_recs_btn.click(
             refresh_recs_button,
             [favorite_ids_state],
             [recs_container, recs_state, recs_page_state, recs_load_btn]
-        )
-
-        # Handle favorite IDs changes from JavaScript
-        favorite_ids_input.change(
-            handle_favorite_ids_change,
-            [favorite_ids_input],
-            [favorite_ids_state, recs_container, recs_state, recs_page_state, recs_load_btn]
         )
 
         # ---------- INITIAL LOAD ----------
@@ -501,17 +485,6 @@ function updateFavoritesSidebar(){
   sidebarList.innerHTML = html;
 }
 
-// ---------- Sync Favorites to Python ----------
-function syncFavoritesToPython() {
-    const favoriteIds = Array.from(favorites.keys());
-    const hiddenInput = document.getElementById('favorite-ids-input');
-    console.log("what we got",favoriteIds)
-    if (hiddenInput) {
-        hiddenInput.value = JSON.stringify(favoriteIds);
-        hiddenInput.dispatchEvent(new Event('input', { bubbles: true }));
-    }
-}
-
 // ---------- Click Handler ----------
 document.addEventListener('click', e=>{
   // --- Remove Favorite from Sidebar ---
@@ -523,7 +496,6 @@ document.addEventListener('click', e=>{
     updateFavoritesSidebar();
     const cardBtn = document.querySelector(`.book-card[data-id="${id}"] .fav-btn`);
     if(cardBtn) cardBtn.classList.remove('fav-active');
-    syncFavoritesToPython();
     return;
   }
 
@@ -544,7 +516,6 @@ document.addEventListener('click', e=>{
       favBtn.classList.add('fav-active');
     }
     updateFavoritesSidebar();
-    syncFavoritesToPython();
     return;
   }
 
@@ -588,4 +559,4 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape') overlay.style.displ
 </script>
 """)
 
-demo.launch()
+demo.launch(ssr_mode=False)
