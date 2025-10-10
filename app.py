@@ -528,25 +528,18 @@ function updateFavoritesSidebar(){
 }
 
 // ------sync fav ids with python for recs------
+function findFavBox() {
+  const gradioApp = document.querySelector('gradio-app') || document.querySelector('body > gradio-app');
+  if (!gradioApp) return null;
+  const shadow = gradioApp.shadowRoot || gradioApp; 
+  return shadow.querySelector('textarea[aria-label="Favorite IDs"]');
+}
+
 function syncFavoritesToPython() {
   const fav_ids = Array.from(favorites.keys()).join(',');
-  // preferred: the wrapper element Gradio outputs will have the elem_id we set
-  const wrapper = document.getElementById('fav-ids-box'); // this is the component wrapper
-  // The actual editable area is a <textarea> nested inside that wrapper.
-  let favBox = null;
-  if (wrapper) {
-    favBox = wrapper.querySelector('textarea') || wrapper.querySelector('input');
-  }
-
-  // fallback: try aria-label
-  if (!favBox) {
-    favBox = document.querySelector('textarea[aria-label="Favorite IDs"], input[aria-label="Favorite IDs"]');
-  }
-
+  const favBox = findFavBox();
   console.log("Syncing favorites to Python:", fav_ids, "favBox found:", !!favBox);
-
   if (favBox) {
-    // update the DOM value & dispatch an input event so Gradio notices the change
     favBox.value = fav_ids;
     favBox.dispatchEvent(new Event('input', { bubbles: true }));
   } else {
