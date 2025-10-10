@@ -3,7 +3,7 @@ import ast
 import pandas as pd
 import gradio as gr
 from sklearn.metrics.pairwise import cosine_similarity
-
+import numpy as np
 
 # ---------- Load dataset ----------
 df = pd.read_csv("data_mini_books_update.csv")
