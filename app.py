@@ -1,5 +1,3 @@
-
-
 import ast
 import pandas as pd
 import gradio as gr
@@ -15,19 +13,12 @@ df["authors"] = df["authors"].apply(lambda x: ast.literal_eval(x) if isinstance(
 df["genres"] = df["genres"].apply(lambda x: ast.literal_eval(x) if isinstance(x, str) else x)
 
 embeddings = np.load("book_embeddings.npy")
-
 df['embedding']=list(embeddings)
-
 
 BOOKS_PER_LOAD = 12
 BOOKS_PER_REC = 100
 
 # ---------- Helpers ----------
-
-# Python function to refresh recs
-
-
-# -------
 def create_book_card_html(book):
     return f"""
     <div class='book-card' 
@@ -50,7 +41,6 @@ def build_books_grid_html(books_df):
         return "<div class='no-books'>No books found</div>"
     cards_html = [create_book_card_html(book) for _, book in books_df.iterrows()]
     return f"<div class='books-grid'>{''.join(cards_html)}</div>"
-
 
 # ---------- Recommendation System ----------
 def get_recommendations(favorite_ids):
@@ -137,11 +127,9 @@ def load_more_recommendations(recs_state, recs_page_state):
 def handle_favorite_ids_change(favorite_ids_json):
     try:
         favorite_ids = json.loads(favorite_ids_json) if favorite_ids_json else []
-        favorite_ids_state.value = favorite_ids
         return favorite_ids, *refresh_recommendations(favorite_ids)
     except:
         return [], build_books_grid_html(pd.DataFrame()), pd.DataFrame(), 0, gr.update(visible=False)
-
 
 # ---------- Search Functions ----------
 def search_books(query, search_results_state, search_page_state):
@@ -283,11 +271,10 @@ with gr.Blocks(css="""
 .clear-search:hover { background:#666; }
 """) as demo:
 
-
     with gr.Column(elem_classes="main-content"):
         gr.Markdown("# 📚 Dark Library Explorer")
         
-        # ---------- ADD THIS SEARCH SECTION ----------
+        # ---------- SEARCH SECTION ----------
         with gr.Column(elem_classes="search-section"):
             gr.Markdown("### 🔍 Search Books")
             with gr.Row(elem_classes="search-row"):
@@ -299,24 +286,25 @@ with gr.Blocks(css="""
                 search_btn = gr.Button("Search", elem_classes="search-btn")
             
             clear_search_btn = gr.Button("Clear Search", elem_classes="clear-search", visible=False)
-        # ---------- END OF SEARCH SECTION ----------
+        
+        # Hidden input for favorite IDs
+        favorite_ids_input = gr.Textbox(visible=False, elem_id="favorite-ids-input")
     
-    
+        # ---------- RANDOM BOOKS SECTION ----------
         gr.Markdown("🎲 Random Books", elem_classes="section-header")
         random_loaded_state = gr.State(df.sample(frac=1).reset_index(drop=True))
         random_display_state = gr.State(pd.DataFrame())
         random_page_state = gr.State(0)
 
-        # ---------- ADD THESE SEARCH STATES ----------
         search_results_state = gr.State(pd.DataFrame())
         search_page_state = gr.State(0)
-        # ---------- END SEARCH STATES ----------
+        favorite_ids_state = gr.State([])
         
-        # Scroll section as flex container
         with gr.Column(elem_classes="scroll-section"):
             random_container = gr.HTML()
             random_load_btn = gr.Button("📘 Load More Random Books", elem_classes="load-more-btn")
     
+        # ---------- POPULAR BOOKS SECTION ----------
         gr.Markdown("🌟 Popular Books", elem_classes="section-header")
         popular_loaded_state = gr.State(df.head(len(df)))
         popular_display_state = gr.State(pd.DataFrame())
@@ -324,174 +312,146 @@ with gr.Blocks(css="""
     
         with gr.Column(elem_classes="scroll-section"):
             popular_container = gr.HTML()
-    
-        
-            # Load More button outside scroll section
             popular_load_btn = gr.Button("📖 Load More Popular Books", elem_classes="load-more-btn")
 
-
-        # ---------- Recommendations Section ----------
-                # Hidden input for favorite IDs
-        favorite_ids_input = gr.Textbox(visible=False, elem_id="favorite-ids-input")
+        # ---------- RECOMMENDATIONS SECTION ----------
         gr.Markdown("💫 Recommended For You", elem_classes="section-header")
         recs_state = gr.State(pd.DataFrame())
         recs_display_state = gr.State(pd.DataFrame())
         recs_page_state = gr.State(0)
 
-        favorite_ids_state = gr.State([])  # Add this line
-
-
-        # ---------- END SEARCH STATES ----------
-
         with gr.Column(elem_classes="scroll-section"):
             recs_container = gr.HTML("<div class='no-books'>Add some favorites to get recommendations!</div>")
- 
             with gr.Row(elem_classes="refresh-row"):
                 refresh_recs_btn = gr.Button("🔄 Refresh Recommendations", elem_classes="load-more-btn")
                 recs_load_btn = gr.Button("📚 Load More Recommendations", elem_classes="load-more-btn", visible=False)
         
-            
-            # ---------- Load More Logic ----------
-            def load_more(loaded_books, display_books, page_idx):
-                start = page_idx * BOOKS_PER_LOAD
-                end = start + BOOKS_PER_LOAD
-                new_books = loaded_books.iloc[start:end]
-                if display_books is None or display_books.empty:
-                    display_books = pd.DataFrame()
-                if new_books.empty:
-                    combined = display_books
-                    html = build_books_grid_html(combined)
-                    return combined, gr.update(value=html), page_idx, gr.update(visible=False)
-                combined = pd.concat([display_books, new_books], ignore_index=True)
+        # ---------- LOAD MORE LOGIC ----------
+        def load_more(loaded_books, display_books, page_idx):
+            start = page_idx * BOOKS_PER_LOAD
+            end = start + BOOKS_PER_LOAD
+            new_books = loaded_books.iloc[start:end]
+            if display_books is None or display_books.empty:
+                display_books = pd.DataFrame()
+            if new_books.empty:
+                combined = display_books
                 html = build_books_grid_html(combined)
-                has_more = end < len(loaded_books)
-                return combined, gr.update(value=html), page_idx + 1, gr.update(visible=has_more)
+                return combined, gr.update(value=html), page_idx, gr.update(visible=False)
+            combined = pd.concat([display_books, new_books], ignore_index=True)
+            html = build_books_grid_html(combined)
+            has_more = end < len(loaded_books)
+            return combined, gr.update(value=html), page_idx + 1, gr.update(visible=has_more)
 
-            # ---------- Combined Load More Logic ----------
-            def load_more_combined(random_loaded_state, random_display_state, random_page_state, 
-                                 search_results_state, search_page_state):
-                # Check if we're in search mode
-                if search_results_state is not None and not search_results_state.empty:
-                    # Load more search results
-                    start = search_page_state * BOOKS_PER_LOAD
-                    end = start + BOOKS_PER_LOAD
-                    new_books = search_results_state.iloc[start:end]
-                    
-                    if new_books.empty:
-                        combined = search_results_state.iloc[:start]
-                        html = build_books_grid_html(combined)
-                        return html, random_display_state, random_page_state, gr.update(visible=False), search_page_state
-                    
-                    # Get all books loaded so far
-                    all_loaded = search_results_state.iloc[:end]
-                    html = build_books_grid_html(all_loaded)
-                    
-                    has_more = end < len(search_results_state)
-                    return html, random_display_state, random_page_state, gr.update(visible=has_more), search_page_state + 1
-                else:
-                    # Load more random books
-                    start = random_page_state * BOOKS_PER_LOAD
-                    end = start + BOOKS_PER_LOAD
-                    new_books = random_loaded_state.iloc[start:end]
-                    
-                    if random_display_state is None or random_display_state.empty:
-                        random_display_state = pd.DataFrame()
-                    
-                    if new_books.empty:
-                        combined = random_display_state
-                        html = build_books_grid_html(combined)
-                        return html, combined, random_page_state, gr.update(visible=False), search_page_state
-                    
-                    combined = pd.concat([random_display_state, new_books], ignore_index=True)
-                    html = build_books_grid_html(combined)
-                    
-                    has_more = end < len(random_loaded_state)
-                    return html, combined, random_page_state + 1, gr.update(visible=has_more), search_page_state
-
-            # ------- update recommendations logic -------
-
-
-    
-            random_load_btn.click(
-                load_more_combined,
-                [random_loaded_state, random_display_state, random_page_state, search_results_state, search_page_state],
-                [random_container, random_display_state, random_page_state, random_load_btn, search_page_state]
-            )
-            
-            popular_load_btn.click(
-                load_more,
-                [popular_loaded_state, popular_display_state, popular_page_state],
-                [popular_display_state, popular_container, popular_page_state, popular_load_btn]
-            )
-
-            # ---------- Search Logic ----------
-            search_btn.click(
-                search_books,
-                [search_input, search_results_state, search_page_state],
-                [random_container, clear_search_btn, search_results_state, search_page_state, random_load_btn]
-            )
-            
-            # Enter key to search
-            search_input.submit(
-                search_books,
-                [search_input, search_results_state, search_page_state],
-                [random_container, clear_search_btn, search_results_state, search_page_state, random_load_btn]
-            )
-            
-            clear_search_btn.click(
-                clear_search,
-                [random_loaded_state],
-                [search_input, random_container, clear_search_btn, search_results_state, search_page_state, random_load_btn]
-            )
-
-
-            # ---------- Recommendations Logic ----------
-            def update_favorites(favorite_ids):
-                # Update the state
-                favorite_ids_state.value = favorite_ids
-                return refresh_recommendations(favorite_ids)
-
+        def load_more_combined(random_loaded_state, random_display_state, random_page_state, 
+                             search_results_state, search_page_state):
+            # Check if we're in search mode
+            if search_results_state is not None and not search_results_state.empty:
+                # Load more search results
+                start = search_page_state * BOOKS_PER_LOAD
+                end = start + BOOKS_PER_LOAD
+                new_books = search_results_state.iloc[start:end]
                 
-            recs_load_btn.click(
-                load_more_recommendations,
-                [recs_state, recs_page_state],
-                [recs_container, recs_page_state, recs_load_btn]
-            )
+                if new_books.empty:
+                    combined = search_results_state.iloc[:start]
+                    html = build_books_grid_html(combined)
+                    return html, random_display_state, random_page_state, gr.update(visible=False), search_page_state
+                
+                # Get all books loaded so far
+                all_loaded = search_results_state.iloc[:end]
+                html = build_books_grid_html(all_loaded)
+                
+                has_more = end < len(search_results_state)
+                return html, random_display_state, random_page_state, gr.update(visible=has_more), search_page_state + 1
+            else:
+                # Load more random books
+                start = random_page_state * BOOKS_PER_LOAD
+                end = start + BOOKS_PER_LOAD
+                new_books = random_loaded_state.iloc[start:end]
+                
+                if random_display_state is None or random_display_state.empty:
+                    random_display_state = pd.DataFrame()
+                
+                if new_books.empty:
+                    combined = random_display_state
+                    html = build_books_grid_html(combined)
+                    return html, combined, random_page_state, gr.update(visible=False), search_page_state
+                
+                combined = pd.concat([random_display_state, new_books], ignore_index=True)
+                html = build_books_grid_html(combined)
+                
+                has_more = end < len(random_loaded_state)
+                return html, combined, random_page_state + 1, gr.update(visible=has_more), search_page_state
 
-            refresh_recs_btn.click(
-                refresh_recs_button,
-                [favorite_ids_state],
-                [recs_container, recs_state, recs_page_state, recs_load_btn]
-            )
+        # ---------- EVENT HANDLERS ----------
+        random_load_btn.click(
+            load_more_combined,
+            [random_loaded_state, random_display_state, random_page_state, search_results_state, search_page_state],
+            [random_container, random_display_state, random_page_state, random_load_btn, search_page_state]
+        )
+        
+        popular_load_btn.click(
+            load_more,
+            [popular_loaded_state, popular_display_state, popular_page_state],
+            [popular_display_state, popular_container, popular_page_state, popular_load_btn]
+        )
 
-            # Handle favorite IDs changes from JavaScript
-            favorite_ids_input.change(
-                handle_favorite_ids_change,
-                [favorite_ids_input],
-                [favorite_ids_state, recs_container, recs_state, recs_page_state, recs_load_btn]
-            )
-            # ---------- Initial Load ----------
-            def initial_load(loaded_books):
-                return load_more(loaded_books, pd.DataFrame(), 0)
-    
-            demo.load(
-                lambda: [
-                    *initial_load(random_loaded_state.value),
-                    *initial_load(popular_loaded_state.value)
-                ],
-                outputs=[
-                    random_display_state, random_container, random_page_state, random_load_btn,
-                    popular_display_state, popular_container, popular_page_state, popular_load_btn
-                ]
-            )
+        search_btn.click(
+            search_books,
+            [search_input, search_results_state, search_page_state],
+            [random_container, clear_search_btn, search_results_state, search_page_state, random_load_btn]
+        )
+        
+        search_input.submit(
+            search_books,
+            [search_input, search_results_state, search_page_state],
+            [random_container, clear_search_btn, search_results_state, search_page_state, random_load_btn]
+        )
+        
+        clear_search_btn.click(
+            clear_search,
+            [random_loaded_state],
+            [search_input, random_container, clear_search_btn, search_results_state, search_page_state, random_load_btn]
+        )
 
- 
+        recs_load_btn.click(
+            load_more_recommendations,
+            [recs_state, recs_page_state],
+            [recs_container, recs_page_state, recs_load_btn]
+        )
+
+        refresh_recs_btn.click(
+            refresh_recs_button,
+            [favorite_ids_state],
+            [recs_container, recs_state, recs_page_state, recs_load_btn]
+        )
+
+        # Handle favorite IDs changes from JavaScript
+        favorite_ids_input.change(
+            handle_favorite_ids_change,
+            [favorite_ids_input],
+            [favorite_ids_state, recs_container, recs_state, recs_page_state, recs_load_btn]
+        )
+
+        # ---------- INITIAL LOAD ----------
+        def initial_load(loaded_books):
+            return load_more(loaded_books, pd.DataFrame(), 0)
+
+        demo.load(
+            lambda: [
+                *initial_load(random_loaded_state.value),
+                *initial_load(popular_loaded_state.value)
+            ],
+            outputs=[
+                random_display_state, random_container, random_page_state, random_load_btn,
+                popular_display_state, popular_container, popular_page_state, popular_load_btn
+            ]
+        )
 
         with gr.Column(elem_classes="sidebar"):
             gr.Markdown("## ⭐ Favorites")
             favorites_container = gr.HTML("<div id='favorites-list'><p>No favorites yet.</p></div>")
 
-    # ---------- Detail popup + Fav JS ----------
+    # ---------- JAVASCRIPT ----------
     gr.HTML("""
 <div id="detail-overlay">
   <div id="detail-box">
@@ -543,56 +503,15 @@ function updateFavoritesSidebar(){
   sidebarList.innerHTML = html;
 }
 
-
-// ----------------------------------------------------------------------
-
-// Function to sync favorites to Python for recommendations
+// ---------- Sync Favorites to Python ----------
 function syncFavoritesToPython() {
     const favoriteIds = Array.from(favorites.keys());
-    // Trigger Python function with favorite IDs
-    if (window.gradio_api) {
-        window.gradio_api('/update_favorites', {
-            data: [favoriteIds]
-        });
+    const hiddenInput = document.getElementById('favorite-ids-input');
+    if (hiddenInput) {
+        hiddenInput.value = JSON.stringify(favoriteIds);
+        hiddenInput.dispatchEvent(new Event('input', { bubbles: true }));
     }
 }
-
-// Call this whenever favorites change
-function updateFavoritesSidebar(){
-  const sidebarList = document.getElementById('favorites-list');
-  if(!sidebarList) return;
-
-  if(favorites.size === 0){
-    sidebarList.innerHTML = "<p>No favorites yet.</p>";
-    return;
-  }
-
-  let html = "";
-  favorites.forEach((book,id)=>{
-    html += `
-      <div class="sidebar-book" data-id="${id}">
-        <img src="${escapeHtml(book.img)}" 
-             style="width:40px;height:56px;object-fit:cover;border-radius:4px;">
-        <div style="flex:1;font-size:12px;color:#fff;">
-          <strong>${escapeHtml(book.title)}</strong><br>
-          <span style="color:#aaa;">${escapeHtml(book.authors)}</span>
-        </div>
-        <button class="remove-fav-btn" title="Remove from Favorites"
-          style="background:none;border:none;color:#888;cursor:pointer;font-size:14px;">
-          🗑️
-        </button>
-      </div>`;
-  });
-  sidebarList.innerHTML = html;
-  
-  // Sync to Python for recommendations
-  syncFavoritesToPython();
-}
-
-
-// ----------------------------------------------------------------------
-// ---------- Favorites Update Event ----------
-const updateFavoritesEvent = new Event('favorites_updated');
 
 // ---------- Click Handler ----------
 document.addEventListener('click', e=>{
@@ -603,12 +522,9 @@ document.addEventListener('click', e=>{
     const id = parent.dataset.id;
     favorites.delete(id);
     updateFavoritesSidebar();
-    // also un-highlight the corresponding book card
     const cardBtn = document.querySelector(`.book-card[data-id="${id}"] .fav-btn`);
     if(cardBtn) cardBtn.classList.remove('fav-active');
-    
-    // Trigger recommendations update
-    document.dispatchEvent(updateFavoritesEvent);
+    syncFavoritesToPython();
     return;
   }
 
@@ -629,24 +545,9 @@ document.addEventListener('click', e=>{
       favBtn.classList.add('fav-active');
     }
     updateFavoritesSidebar();
-    
-    // Trigger recommendations update
-    document.dispatchEvent(updateFavoritesEvent);
+    syncFavoritesToPython();
     return;
   }
-
-  // ---------- Update Recommendations when Favorites Change ----------
-document.addEventListener('favorites_updated', function() {
-    const favoriteIds = Array.from(favorites.keys());
-    // This will be connected to Python function
-    if (window.gradio_app) {
-        // Trigger the Python update_favorites function
-        const event = new CustomEvent('update_favorites', {
-            detail: { data: [favoriteIds] }
-        });
-        document.dispatchEvent(event);
-    }
-});
 
   // --- Book Detail Popup ---
   const card = e.target.closest('.book-card');
@@ -664,7 +565,6 @@ document.addEventListener('favorites_updated', function() {
         <h2 style="margin:0 0 8px 0;color:#fff;">${escapeHtml(title)}</h2>
         <p style="margin:0 0 4px 0;color:#fff;"><strong>Author(s):</strong> ${escapeHtml(authors)}</p>
         <p style="margin:0 0 6px 0;color:#fff;"><strong>Genres:</strong> ${escapeHtml(genres)}</p>
-
         <div><strong>Description:</strong></div>
         <div class="desc-scroll">${escapeHtml(desc)}</div>
       </div>
@@ -686,13 +586,7 @@ document.addEventListener('favorites_updated', function() {
 closeBtn.addEventListener('click',()=>{overlay.style.display='none';});
 overlay.addEventListener('click',e=>{if(e.target===overlay) overlay.style.display='none';});
 document.addEventListener('keydown',e=>{if(e.key==='Escape') overlay.style.display='none';});
-
-demo.register_event_handler("update_favorites", update_favorites, outputs=[
-    recs_container, recs_state, recs_display_state, recs_page_state, recs_load_btn
-])
-
 </script>
-
 """)
 
 demo.launch()
