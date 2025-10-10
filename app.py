@@ -391,10 +391,16 @@ with gr.Blocks(css="""
         )
 
         refresh_recs_btn.click(
-            refresh_recommendations,
+            refresh_recommendations_with_favorites,
             outputs=[recs_container, recs_state, recs_page_state, recs_load_btn]
         )
 
+        # Add this handler for the hidden input:
+        favorite_ids_input.change(
+            handle_favorite_ids_change,
+            [favorite_ids_input],
+            [favorite_ids_state]
+        )
         # ---------- INITIAL LOAD ----------
         def initial_load(loaded_books):
             return load_more(loaded_books, pd.DataFrame(), 0)
@@ -437,6 +443,18 @@ function escapeHtml(str){
     .replace(/'/g,'&#39;') : "";
 }
 
+
+// ---------- Sync Favorites to Python ----------
+function syncFavoritesToPython() {
+    const favoriteIds = Array.from(favorites.keys());
+    const hiddenInput = document.getElementById('favorite-ids-input');
+    if (hiddenInput) {
+        hiddenInput.value = JSON.stringify(favoriteIds);
+        // Trigger the input event so Gradio detects the change
+        hiddenInput.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+}
+
 // ---------- Update Sidebar ----------
 function updateFavoritesSidebar(){
   const sidebarList = document.getElementById('favorites-list');
@@ -464,6 +482,10 @@ function updateFavoritesSidebar(){
       </div>`;
   });
   sidebarList.innerHTML = html;
+  
+  // Sync to Python after updating sidebar
+  syncFavoritesToPython();
+
 }
 
 // ---------- Click Handler ----------
