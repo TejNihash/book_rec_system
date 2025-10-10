@@ -2,17 +2,43 @@
 import ast
 import pandas as pd
 import gradio as gr
+from sklearn.metrics.pairwise import cosine_similarity
+
 
 # ---------- Load dataset ----------
-df = pd.read_csv("data_mini_books.csv")
+df = pd.read_csv("data_mini_books_update.csv")
 if "id" not in df.columns:
     df["id"] = df.index.astype(str)
 df["authors"] = df["authors"].apply(lambda x: ast.literal_eval(x) if isinstance(x, str) else x)
 df["genres"] = df["genres"].apply(lambda x: ast.literal_eval(x) if isinstance(x, str) else x)
 
+embeddings = np.load("book_embeddings.npy")
+
+df['embedding']=list(embeddings)
+
+
 BOOKS_PER_LOAD = 12
 
 # ---------- Helpers ----------
+
+# -------get similar books------
+def get_similar_books(fav_ids, top_k=12):
+    if not fav_ids:
+        return pd.DataFrame()
+
+    fav_books = df[df["id"].isin(fav_ids)]
+    fav_embs = np.stack(fav_books["embedding"].values)
+    mean_emb = fav_embs.mean(axis=0).reshape(1, -1)
+
+    sims = cosine_similarity(mean_emb, np.stack(df["embedding"].values))[0]
+    df["similarity"] = sims
+    recs = (
+        df[~df["id"].isin(fav_ids)]
+        .sort_values("similarity", ascending=False)
+        .head(top_k)
+    )
+    return recs
+# -------
 def create_book_card_html(book):
     return f"""
     <div class='book-card' 
@@ -215,7 +241,20 @@ with gr.Blocks(css="""
         
             # Load More button outside scroll section
             popular_load_btn = gr.Button("📖 Load More Popular Books", elem_classes="load-more-btn")
-    
+
+
+        fav_ids_box = gr.Textbox(visible=False, label="Favorite IDs")
+
+        gr.Markdown("💡 Recommended For You", elem_classes="section-header")
+        with gr.Column(elem_classes="scroll-section"):
+            recs_container = gr.HTML()
+            recs_load_btn = gr.Button("🔁 Refresh Recommendations", elem_classes="load-more-btn", visible=False)
+
+
+
+
+        
+            
             # ---------- Load More Logic ----------
             def load_more(loaded_books, display_books, page_idx):
                 start = page_idx * BOOKS_PER_LOAD
@@ -272,6 +311,18 @@ with gr.Blocks(css="""
                     
                     has_more = end < len(random_loaded_state)
                     return html, combined, random_page_state + 1, gr.update(visible=has_more), search_page_state
+
+            # ------- update recommendations logic -------
+
+            def update_recommendations(fav_ids):
+                if not fav_ids:
+                    html = "<div class='no-books'>Add some favorites to see recommendations!</div>"
+                    return html, gr.update(visible=False)
+            
+                rec_df = get_similar_books(fav_ids, top_k=BOOKS_PER_LOAD)
+                html = build_books_grid_html(rec_df)
+                return html, gr.update(visible=True)
+
     
     
             random_load_btn.click(
@@ -285,6 +336,13 @@ with gr.Blocks(css="""
                 [popular_loaded_state, popular_display_state, popular_page_state],
                 [popular_display_state, popular_container, popular_page_state, popular_load_btn]
             )
+
+            recs_load_btn.click(
+                lambda fav_ids: update_recommendations(fav_ids.split(",") if fav_ids else []),
+                [fav_ids_box],
+                [recs_container, recs_load_btn]
+            )
+
 
             # ---------- Search Logic ----------
             search_btn.click(
@@ -378,6 +436,17 @@ function updateFavoritesSidebar(){
   sidebarList.innerHTML = html;
 }
 
+// ------sync fav ids with python for recs------
+function syncFavoritesToPython() {
+  const fav_ids = Array.from(favorites.keys()).join(',');
+  const favBox = document.querySelector('textarea[aria-label="Favorite IDs"]');
+  if (favBox) {
+    favBox.value = fav_ids;
+    favBox.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+}
+
+
 // ---------- Click Handler ----------
 document.addEventListener('click', e=>{
   // --- Remove Favorite from Sidebar ---
@@ -410,6 +479,8 @@ document.addEventListener('click', e=>{
       favBtn.classList.add('fav-active');
     }
     updateFavoritesSidebar();
+    syncFavoritesToPython();   // 👈 added this line for storing ids for recs
+
     return;
   }
 
