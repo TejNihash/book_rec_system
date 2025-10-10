@@ -50,6 +50,7 @@ def refresh_recommendations(fav_ids):
     has_more = len(rec_df) > BOOKS_PER_LOAD
     return html, rec_df, first_batch, 1, gr.update(visible=has_more)
 
+
 # -------
 def create_book_card_html(book):
     return f"""
@@ -264,7 +265,10 @@ with gr.Blocks(css="""
         recs_state = gr.State(pd.DataFrame())        # all recommended books
         recs_display_state = gr.State(pd.DataFrame())  # subset currently shown
         recs_page_state = gr.State(0)
-        fav_ids_box = gr.Textbox(visible=False, label="Favorite IDs", elem_id="fav-ids-box")
+        
+        #fav_ids_box = gr.Textbox(visible=False, label="Favorite IDs", elem_id="fav-ids-box")
+        fav_ids_state = gr.State([])  # stores list of favorite IDs
+
     
         
         with gr.Column(elem_classes="scroll-section"):
@@ -347,6 +351,10 @@ with gr.Blocks(css="""
                 html = build_books_grid_html(rec_df)
                 return html, gr.update(visible=True)
 
+            def update_fav_ids(fav_ids):
+                return fav_ids
+
+
             def load_more_recommendations(recs_state, recs_display_state, recs_page_state):
                 start = recs_page_state * BOOKS_PER_LOAD
                 end = start + BOOKS_PER_LOAD
@@ -381,14 +389,12 @@ with gr.Blocks(css="""
             )
 
             # Refresh button
+            # Bind JS callback to update state
             recs_refresh_btn.click(
-                lambda fav_ids: refresh_recommendations(
-                    [fid.strip() for fid in (fav_ids or "").split(",") if fid.strip()]
-                ),
-                [fav_ids_box],
-                [recs_container, recs_state, recs_display_state, recs_page_state, recs_load_btn]
+                fn=update_fav_ids,
+                inputs=[fav_ids_state],  # will be overwritten by JS
+                outputs=[fav_ids_state]
             )
-
 
             # Load More button
             recs_load_btn.click(
@@ -492,17 +498,11 @@ function updateFavoritesSidebar(){
 
 // ------sync fav ids with python for recs------
 function syncFavoritesToPython() {
-  const fav_ids = Array.from(favorites.keys()).join(',');
-  const favBox = document.getElementById('fav-ids-box').querySelector('textarea');
-  console.log("Syncing favorites:", fav_ids);
-
-
-  if (favBox) {
-    favBox.value = fav_ids;
-    favBox.dispatchEvent(new Event('input', { bubbles: true }));
-    favBox.dispatchEvent(new Event('change', { bubbles: true }));
-
-  }
+    const fav_ids = Array.from(favorites.keys());
+    // trigger a Python update via a hidden "event"
+    if (window.syncFavsCallback) {
+        window.syncFavsCallback(fav_ids);
+    }
 }
 
 
