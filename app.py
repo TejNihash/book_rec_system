@@ -109,6 +109,12 @@ def refresh_recommendations(favorite_ids):
     has_more = len(recommendations) > BOOKS_PER_LOAD
     return html, recommendations, 1, gr.update(visible=has_more)
 
+def refresh_recs_button(favorite_ids):
+    if not favorite_ids:
+        return gr.update(value="<div class='no-books'>Add some favorites to get recommendations!</div>"), pd.DataFrame(), 0, gr.update(visible=False)
+    
+    return refresh_recommendations(favorite_ids)
+
 def load_more_recommendations(recs_state, recs_page_state):
     if recs_state is None or recs_state.empty:
         return gr.update(), recs_page_state, gr.update(visible=False)
@@ -204,6 +210,13 @@ with gr.Blocks(css="""
 .load-more-btn { width:100%; padding:10px; background:#667eea; color:#fff; border:none; border-radius:6px; cursor:pointer; margin-top:10px; font-weight:bold; }
 .load-more-btn:hover { background:#5a6fd8; }
 .load-more-btn:disabled { background:#555; cursor:not-allowed; }
+
+/* ---------- Refresh Button ---------- */
+.refresh-row {
+    display: flex;
+    gap: 10px;
+    margin-top: 10px;
+}
 
 /* ---------- Detail Overlay ---------- */
 #detail-overlay { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:1000; backdrop-filter:blur(6px); }
@@ -314,12 +327,17 @@ with gr.Blocks(css="""
         recs_display_state = gr.State(pd.DataFrame())
         recs_page_state = gr.State(0)
 
+        favorite_ids_state = gr.State([])  # Add this line
+
+
+        # ---------- END SEARCH STATES ----------
+
         with gr.Column(elem_classes="scroll-section"):
             recs_container = gr.HTML("<div class='no-books'>Add some favorites to get recommendations!</div>")
-            recs_load_btn = gr.Button("📚 Load More Recommendations", elem_classes="load-more-btn", visible=False)
-
-
-
+ 
+            with gr.Row(elem_classes="refresh-row"):
+                refresh_recs_btn = gr.Button("🔄 Refresh Recommendations", elem_classes="load-more-btn")
+                recs_load_btn = gr.Button("📚 Load More Recommendations", elem_classes="load-more-btn", visible=False)
         
             
             # ---------- Load More Logic ----------
@@ -416,16 +434,24 @@ with gr.Blocks(css="""
             )
 
 
-                        # ---------- Recommendations Logic ----------
+            # ---------- Recommendations Logic ----------
             def update_favorites(favorite_ids):
+                # Update the state
+                favorite_ids_state.value = favorite_ids
                 return refresh_recommendations(favorite_ids)
-            
+
+                
             recs_load_btn.click(
                 load_more_recommendations,
                 [recs_state, recs_page_state],
                 [recs_container, recs_page_state, recs_load_btn]
             )
-            
+
+            refresh_recs_btn.click(
+                refresh_recs_button,
+                [favorite_ids_state],
+                [recs_container, recs_state, recs_page_state, recs_load_btn]
+            )
             # ---------- Initial Load ----------
             def initial_load(loaded_books):
                 return load_more(loaded_books, pd.DataFrame(), 0)
