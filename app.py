@@ -494,6 +494,8 @@ function updateFavoritesSidebar(){
 function syncFavoritesToPython() {
   const fav_ids = Array.from(favorites.keys()).join(',');
   const favBox = document.getElementById('fav-ids-box').querySelector('textarea');
+  console.log("Syncing favorites:", fav_ids);
+
 
   if (favBox) {
     favBox.value = fav_ids;
