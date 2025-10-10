@@ -383,23 +383,56 @@ with gr.Blocks(css="""
             return f"DEBUG: Current favorite IDs: {favorite_ids}"
 
         debug_btn.click(debug_favorites, outputs=[recs_container])
+
+
+        
         # Add this function for the refresh button
-        def refresh_recommendations_with_favorites(favorite_ids):
-            """Generate recommendations based on current favorite IDs."""
-            print("Refreshing recs with:", favorite_ids)
+        def refresh_recommendations_with_favorites(favorite_ids_js):
+            """
+            favorite_ids_js may be:
+              - a JSON string like '["9555","9506"]'  (recommended)
+              - a Python list ['9555','9506']         (possible)
+            This function normalizes and then computes recommendations.
+            """
+            print("DEBUG: raw favorite_ids_js:", favorite_ids_js, type(favorite_ids_js))
+        
+            # Normalize to Python list of strings
+            favorite_ids = []
+            try:
+                if isinstance(favorite_ids_js, str):
+                    # expected path if JS returned JSON string
+                    favorite_ids = json.loads(favorite_ids_js)
+                elif isinstance(favorite_ids_js, (list, tuple)):
+                    favorite_ids = list(favorite_ids_js)
+                else:
+                    # fallback: try to coerce
+                    favorite_ids = []
+            except Exception as e:
+                print("ERROR parsing favorite ids:", e)
+                favorite_ids = []
+        
+            # defensive: remove falsy / non-string items
+            favorite_ids = [str(x) for x in favorite_ids if x]
+        
+            print("DEBUG: parsed favorite_ids ->", favorite_ids)
+        
             if not favorite_ids:
                 return gr.update(value="<div class='no-books'>Add some favorites first!</div>"), pd.DataFrame(), 0, gr.update(visible=False)
-            
-            # Compute recs
+        
+            # compute recommendations
             recommendations = get_recommendations(favorite_ids)
             if recommendations.empty:
                 return gr.update(value="<div class='no-books'>No recommendations found for your favorites.</div>"), pd.DataFrame(), 0, gr.update(visible=False)
-            
+        
+            # first page
             first_batch = recommendations.head(BOOKS_PER_LOAD)
             html = build_books_grid_html(first_batch)
             has_more = len(recommendations) > BOOKS_PER_LOAD
-            
+        
+            # Return: html for container, full recs DataFrame stored in recs_state,
+            # page index (1 means first page already shown), and whether load-more is visible.
             return html, recommendations, 1, gr.update(visible=has_more)
+
 
         # ---------- EVENT HANDLERS ----------
         random_load_btn.click(
@@ -623,13 +656,13 @@ closeBtn.addEventListener('click',()=>{overlay.style.display='none';});
 overlay.addEventListener('click',e=>{if(e.target===overlay) overlay.style.display='none';});
 document.addEventListener('keydown',e=>{if(e.key==='Escape') overlay.style.display='none';});
 
+// Return JSON string of IDs (safe, predictable)
 function getFavoritesFromJS() {
-  const ids = Array.from(favorites.keys());
-  console.log("🔁 Sending favorites to Python:", ids);
-  return ids;   // Gradio 5 automatically serializes this
+  const ids = Array.from(favorites.keys());       // e.g. ["9555","9506"]
+  console.log("🔁 getFavoritesFromJS ->", ids);
+  return JSON.stringify(ids);                    // send a JSON string to Gradio
 }
 window.getFavoritesFromJS = getFavoritesFromJS;
-
 
 </script>
 """)
