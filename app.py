@@ -223,7 +223,7 @@ with gr.Blocks(css="""
     max-width:calc(100% - 320px); 
 }
 
-/* Mobile sidebar becomes collapsible */
+/* Mobile sidebar becomes truly collapsible */
 @media (max-width: 768px) {
     .app-container {
         flex-direction: column;
@@ -243,26 +243,29 @@ with gr.Blocks(css="""
         order: 2;
         border-left: none;
         border-top: 1px solid #2a2a2a;
+        transition: all 0.3s ease;
     }
     
-    /* Make favorites collapsible on mobile */
+    /* Hide sidebar completely when collapsed */
+    .sidebar.collapsed {
+        display: none;
+    }
+    
+    /* Make favorites header sticky at bottom when collapsed */
     .sidebar-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        background: #667eea;
+        border-radius: 50px;
+        padding: 12px 20px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        z-index: 1000;
         cursor: pointer;
-        padding: 8px 0;
     }
     
-    .sidebar-content {
-        max-height: 200px;
-        overflow-y: auto;
-        transition: max-height 0.3s ease;
-    }
-    
-    .sidebar.collapsed .sidebar-content {
-        max-height: 0;
-        overflow: hidden;
+    .sidebar-header:hover {
+        background: #5a6fd8;
     }
     
     /* Adjust grid for very small screens */
@@ -300,6 +303,8 @@ with gr.Blocks(css="""
         padding: 10px 16px;
     }
 }
+
+
 .sidebar { width:300px; background:#141416; border-left:1px solid #2a2a2a; padding:16px; box-sizing:border-box; overflow-y:auto; position:fixed; right:0; top:0; bottom:0; color:#f0f0f0; }
 
 /* ---------- Fixed Scroll Sections ---------- */
@@ -589,21 +594,41 @@ window.getFavoritesFromJS = getFavoritesFromJS;
 function toggleFavorites() {
     const sidebar = document.querySelector('.sidebar');
     const toggleBtn = document.querySelector('.sidebar-header button');
-    sidebar.classList.toggle('collapsed');
-    toggleBtn.textContent = sidebar.classList.contains('collapsed') ? '▶' : '▼';
+    
+    if (sidebar.classList.contains('collapsed')) {
+        // Show sidebar
+        sidebar.classList.remove('collapsed');
+        toggleBtn.textContent = '▼ Hide Favorites';
+        // Move button back into sidebar
+        document.querySelector('.sidebar-header').style.position = 'static';
+        document.querySelector('.sidebar-header').style.background = 'transparent';
+        document.querySelector('.sidebar-header').style.boxShadow = 'none';
+        document.querySelector('.sidebar-header').style.borderRadius = '0';
+    } else {
+        // Hide sidebar
+        sidebar.classList.add('collapsed');
+        toggleBtn.textContent = '⭐ Show Favorites';
+        // Make button float at bottom
+        document.querySelector('.sidebar-header').style.position = 'fixed';
+        document.querySelector('.sidebar-header').style.background = '#667eea';
+        document.querySelector('.sidebar-header').style.boxShadow = '0 4px 12px rgba(0,0,0,0.3)';
+        document.querySelector('.sidebar-header').style.borderRadius = '50px';
+    }
 }
 
-// Add click handler for mobile toggle
-document.addEventListener('click', function(e) {
-    if (e.target.closest('.sidebar-header') || e.target.closest('.sidebar-header button')) {
-        toggleFavorites();
-    }
-});
-
-// Auto-collapse on very small screens
+// Auto-hide on mobile
 function checkScreenSize() {
-    if (window.innerWidth <= 480) {
-        document.querySelector('.sidebar').classList.add('collapsed');
+    if (window.innerWidth <= 768) {
+        const sidebar = document.querySelector('.sidebar');
+        const toggleBtn = document.querySelector('.sidebar-header button');
+        if (!sidebar.classList.contains('collapsed')) {
+            sidebar.classList.add('collapsed');
+            toggleBtn.textContent = '⭐ Show Favorites';
+            document.querySelector('.sidebar-header').style.position = 'fixed';
+            document.querySelector('.sidebar-header').style.background = '#667eea';
+            document.querySelector('.sidebar-header').style.boxShadow = '0 4px 12px rgba(0,0,0,0.3)';
+            document.querySelector('.sidebar-header').style.borderRadius = '50px';
+        }
     }
 }
 
