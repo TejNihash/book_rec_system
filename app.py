@@ -5,6 +5,7 @@ import pandas as pd
 import gradio as gr
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
+import json
 
 # ---------- Load dataset ----------
 df = pd.read_csv("data_mini_books_update.csv")
@@ -132,6 +133,14 @@ def load_more_recommendations(recs_state, recs_page_state):
     
     has_more = end < len(recs_state)
     return html, recs_page_state + 1, gr.update(visible=has_more)
+
+def handle_favorite_ids_change(favorite_ids_json):
+    try:
+        favorite_ids = json.loads(favorite_ids_json) if favorite_ids_json else []
+        favorite_ids_state.value = favorite_ids
+        return favorite_ids, *refresh_recommendations(favorite_ids)
+    except:
+        return [], build_books_grid_html(pd.DataFrame()), pd.DataFrame(), 0, gr.update(visible=False)
 
 
 # ---------- Search Functions ----------
@@ -322,6 +331,8 @@ with gr.Blocks(css="""
 
 
         # ---------- Recommendations Section ----------
+                # Hidden input for favorite IDs
+        favorite_ids_input = gr.Textbox(visible=False, elem_id="favorite-ids-input")
         gr.Markdown("💫 Recommended For You", elem_classes="section-header")
         recs_state = gr.State(pd.DataFrame())
         recs_display_state = gr.State(pd.DataFrame())
@@ -451,6 +462,13 @@ with gr.Blocks(css="""
                 refresh_recs_button,
                 [favorite_ids_state],
                 [recs_container, recs_state, recs_page_state, recs_load_btn]
+            )
+
+            # Handle favorite IDs changes from JavaScript
+            favorite_ids_input.change(
+                handle_favorite_ids_change,
+                [favorite_ids_input],
+                [favorite_ids_state, recs_container, recs_state, recs_page_state, recs_load_btn]
             )
             # ---------- Initial Load ----------
             def initial_load(loaded_books):
