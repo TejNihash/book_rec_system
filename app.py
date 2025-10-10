@@ -108,28 +108,26 @@ def refresh_recs_button(favorite_ids):
 
 def load_more_recommendations(recs_state, recs_page_state):
     if recs_state is None or recs_state.empty:
-        return gr.update(), recs_page_state, gr.update(visible=False)
+        return build_books_grid_html(pd.DataFrame()), recs_page_state, gr.update(visible=False)
     
     start = recs_page_state * BOOKS_PER_LOAD
     end = start + BOOKS_PER_LOAD
     new_books = recs_state.iloc[start:end]
-    
-    if new_books.empty:
-        return gr.update(), recs_page_state, gr.update(visible=False)
-    
-    # Get all books loaded so far
     all_loaded = recs_state.iloc[:end]
     html = build_books_grid_html(all_loaded)
-    
     has_more = end < len(recs_state)
     return html, recs_page_state + 1, gr.update(visible=has_more)
 
+
 def handle_favorite_ids_change(favorite_ids_json):
     try:
-        favorite_ids = json.loads(favorite_ids_json) if favorite_ids_json else []
-        return favorite_ids, *refresh_recommendations(favorite_ids)
-    except:
+        favorite_ids = list(set(json.loads(favorite_ids_json))) if favorite_ids_json else []
+        html, recs_df, page, btn_update = refresh_recommendations(favorite_ids)
+        return favorite_ids, html, recs_df, page, btn_update
+    except Exception as e:
+        print("Error in handle_favorite_ids_change:", e)
         return [], build_books_grid_html(pd.DataFrame()), pd.DataFrame(), 0, gr.update(visible=False)
+
 
 # ---------- Search Functions ----------
 def search_books(query, search_results_state, search_page_state):
@@ -412,12 +410,12 @@ with gr.Blocks(css="""
             [random_loaded_state],
             [search_input, random_container, clear_search_btn, search_results_state, search_page_state, random_load_btn]
         )
-
         recs_load_btn.click(
             load_more_recommendations,
             [recs_state, recs_page_state],
             [recs_container, recs_page_state, recs_load_btn]
         )
+
 
         refresh_recs_btn.click(
             refresh_recs_button,
