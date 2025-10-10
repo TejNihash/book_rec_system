@@ -23,36 +23,7 @@ BOOKS_PER_REC = 100
 
 # ---------- Helpers ----------
 
-# -------get similar books------
-'''def get_similar_books(fav_ids, top_k=100):
-    if not fav_ids:
-        return pd.DataFrame()
-
-    fav_books = df[df["id"].isin(fav_ids)]
-    fav_embs = np.stack(fav_books["embedding"].values)
-    mean_emb = fav_embs.mean(axis=0).reshape(1, -1)
-
-    sims = cosine_similarity(mean_emb, np.stack(df["embedding"].values))[0]
-    df["similarity"] = sims
-    recs = (
-        df[~df["id"].isin(fav_ids)]
-        .sort_values("similarity", ascending=False)
-        .head(top_k)
-    )
-    return recs'''
-
 # Python function to refresh recs
-def refresh_recommendations_from_state(fav_ids_list):
-    print("Received favorites:", fav_ids_list)
-    if not fav_ids_list:
-        html = "<div class='no-books'>Add some favorites to see recommendations!</div>"
-        return html, pd.DataFrame(), pd.DataFrame(), 0, gr.update(visible=False)
-    
-    rec_df = get_similar_books(fav_ids_list)
-    first_batch = rec_df.head(BOOKS_PER_LOAD)
-    html = build_books_grid_html(first_batch)
-    has_more = len(rec_df) > BOOKS_PER_LOAD
-    return html, rec_df, first_batch, 1, gr.update(visible=has_more)
 
 
 # -------
@@ -262,29 +233,6 @@ with gr.Blocks(css="""
 
         fav_ids_box = gr.Textbox(visible=False, label="Favorite IDs", elem_id="fav-ids-box")
 
-        # -----rec section------------
-
-        gr.Markdown("💡 Recommended For You", elem_classes="section-header")
-        
-        
-        # states for recs
-        recs_state = gr.State(pd.DataFrame())        # all recommended books
-        recs_display_state = gr.State(pd.DataFrame())  # subset currently shown
-        recs_page_state = gr.State(0)
-        fav_ids_state = gr.State([])
-        
-
-
-
-        
-        with gr.Column(elem_classes="scroll-section"):
-            # --- Refresh at the top ---
-            recs_refresh_btn = gr.Button("🔁 Refresh Recommendations", elem_classes="load-more-btn")
-        
-            recs_container = gr.HTML("<div class='no-books'>No recommendations yet.</div>")
-        
-            # --- Load More at the bottom ---
-            recs_load_btn = gr.Button("📖 Load More Recommendations", elem_classes="load-more-btn", visible=False)
 
 
         
@@ -348,70 +296,7 @@ with gr.Blocks(css="""
 
             # ------- update recommendations logic -------
 
-            # defensive helper to normalize the incoming fav_ids string -> list[str]
-            def parse_fav_ids_string(fav_ids_str):
-                # fav_ids_str may be None
-                tokens = [x.strip() for x in (fav_ids_str or "").split(",") if x.strip()]
-                # keep as strings (your df ids are strings)
-                return [str(x) for x in tokens]
 
-            def get_similar_books(fav_ids, top_k=100):
-                if not fav_ids:
-                    return pd.DataFrame()
-                fav_ids = [str(x) for x in fav_ids]
-                fav_books = df[df["id"].isin(fav_ids)]
-                if fav_books.empty:
-                    print("DEBUG: get_similar_books - no fav books found for ids:", fav_ids)
-                fav_embs = np.stack(fav_books["embedding"].values) if not fav_books.empty else np.empty((0, embeddings.shape[1]))
-                if fav_embs.size == 0:
-                    return pd.DataFrame()
-                mean_emb = fav_embs.mean(axis=0).reshape(1, -1)
-                sims = cosine_similarity(mean_emb, np.stack(df["embedding"].values))[0]
-                df_with_sims = df.copy()
-                df_with_sims["similarity"] = sims
-                recs = df_with_sims[~df_with_sims["id"].isin(fav_ids)].sort_values("similarity", ascending=False).head(top_k)
-                return recs
-
-
-            def update_favorites(event: gr.EventData):
-                fav_ids = event.data.get("fav_ids", [])
-                print("Updated favorites:", fav_ids)
-                # Optionally refresh recommendations automatically:
-                html, rec_df, first_batch, page, load_btn = refresh_recommendations(fav_ids)
-                return html, rec_df, first_batch, page, load_btn
-
-
-
-            def update_recommendations(fav_ids):
-                
-                if not fav_ids:
-                    html = "<div class='no-books'>Add some favorites to seeeee recommendations!</div>"
-                    return html, gr.update(visible=False)
-            
-                rec_df = get_similar_books(fav_ids, top_k=BOOKS_PER_REC)
-                html = build_books_grid_html(rec_df)
-                return html, gr.update(visible=True)
-
-            def load_more_recommendations(recs_state, recs_display_state, recs_page_state):
-                start = recs_page_state * BOOKS_PER_LOAD
-                end = start + BOOKS_PER_LOAD
-                new_books = recs_state.iloc[start:end]
-            
-                if recs_display_state is None or recs_display_state.empty:
-                    recs_display_state = pd.DataFrame()
-            
-                if new_books.empty:
-                    combined = recs_display_state
-                    html = build_books_grid_html(combined)
-                    return combined, html, recs_page_state, gr.update(visible=False)
-            
-                combined = pd.concat([recs_display_state, new_books], ignore_index=True)
-                html = build_books_grid_html(combined)
-                has_more = end < len(recs_state)
-                return combined, html, recs_page_state + 1, gr.update(visible=has_more)
-            
-
-    
     
             random_load_btn.click(
                 load_more_combined,
@@ -424,30 +309,6 @@ with gr.Blocks(css="""
                 [popular_loaded_state, popular_display_state, popular_page_state],
                 [popular_display_state, popular_container, popular_page_state, popular_load_btn]
             )
-
-            # Refresh button
-            # Your refresh click should be defensive about None and clean the input
-            # Wire a button click to the State
-            recs_refresh_btn.click(
-                refresh_recommendations_from_state,
-                inputs=[fav_ids_state],
-                outputs=[recs_container, recs_state, recs_display_state, recs_page_state, recs_load_btn]
-            )  
-            # Load More button
-            recs_load_btn.click(
-                load_more_recommendations,
-                [recs_state, recs_display_state, recs_page_state],
-                [recs_display_state, recs_container, recs_page_state, recs_load_btn]
-            )
-
-            sync_favs_btn = gr.Button(visible=False)
-            
-            sync_favs_btn.click(
-                refresh_recommendations,
-                [fav_ids_state],
-                [recs_container, recs_state, recs_display_state, recs_page_state, recs_load_btn]
-            )
-
 
             # ---------- Search Logic ----------
             search_btn.click(
@@ -540,22 +401,6 @@ function updateFavoritesSidebar(){
   });
   sidebarList.innerHTML = html;
 }
-
-// ------sync fav ids with python for recs------
-async function syncFavoritesToPython() {
-  const fav_ids = Array.from(favorites.keys());
-  console.log("Syncing favorites to Python:", fav_ids);
-
-  // Find the State component in Gradio
-  const stateComponent = document.querySelector('gr-state[label="fav_ids_state"]');
-  if (stateComponent && stateComponent.setValue) {
-    stateComponent.setValue(fav_ids); // updates the backend state
-  } else {
-    console.warn("⚠️ Cannot find gr.State component for fav_ids_state");
-  }
-}
-
-
 
 
 // ---------- Click Handler ----------
