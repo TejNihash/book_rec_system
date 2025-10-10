@@ -264,10 +264,14 @@ with gr.Blocks(css="""
 
         gr.Markdown("💡 Recommended For You", elem_classes="section-header")
         
+        
         # states for recs
         recs_state = gr.State(pd.DataFrame())        # all recommended books
         recs_display_state = gr.State(pd.DataFrame())  # subset currently shown
         recs_page_state = gr.State(0)
+
+        fav_ids_state = gr.State([])   # store favorite IDs as a Python list
+
         
         with gr.Column(elem_classes="scroll-section"):
             # --- Refresh at the top ---
@@ -339,6 +343,14 @@ with gr.Blocks(css="""
                     return html, combined, random_page_state + 1, gr.update(visible=has_more), search_page_state
 
             # ------- update recommendations logic -------
+
+            def update_favorites(event: gr.EventData):
+                fav_ids = event.data.get("fav_ids", [])
+                print("Updated favorites:", fav_ids)
+                # Optionally refresh recommendations automatically:
+                html, rec_df, first_batch, page, load_btn = refresh_recommendations(fav_ids)
+                return html, rec_df, first_batch, page, load_btn
+            
 
             def update_recommendations(fav_ids):
                 
@@ -497,10 +509,15 @@ function syncFavoritesToPython() {
   const fav_ids = Array.from(favorites.keys()).join(',');
   const favBox = document.querySelector('textarea[aria-label="Favorite IDs"]');
   console.log("Syncing favorites to Python:", fav_ids);
+  
 
   if (favBox) {
-    favBox.value = fav_ids;
-    favBox.dispatchEvent(new Event('input', { bubbles: true }));
+    console.log("this is the moment")
+    const gradioAppEl = document.querySelector('gradio-app');
+    if (gradioAppEl && gradioAppEl.send_event) {
+      gradioAppEl.send_event('update_favorites', { fav_ids: Array.from(favorites.keys()) });
+    }
+
   }
 }
 
