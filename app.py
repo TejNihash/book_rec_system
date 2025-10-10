@@ -255,7 +255,6 @@ with gr.Blocks(css="""
             popular_load_btn = gr.Button("📖 Load More Popular Books", elem_classes="load-more-btn")
 
 
-        fav_ids_box = gr.Textbox(visible=False, label="Favorite IDs")
 
         # -----rec section------------
 
@@ -265,6 +264,8 @@ with gr.Blocks(css="""
         recs_state = gr.State(pd.DataFrame())        # all recommended books
         recs_display_state = gr.State(pd.DataFrame())  # subset currently shown
         recs_page_state = gr.State(0)
+        fav_ids_box = gr.Textbox(visible=False, label="Favorite IDs", elem_id="fav-ids-box")
+    
         
         with gr.Column(elem_classes="scroll-section"):
             # --- Refresh at the top ---
@@ -492,7 +493,8 @@ function updateFavoritesSidebar(){
 // ------sync fav ids with python for recs------
 function syncFavoritesToPython() {
   const fav_ids = Array.from(favorites.keys()).join(',');
-  const favBox = document.querySelector('textarea[aria-label="Favorite IDs"]');
+  const favBox = document.getElementById('fav-ids-box').querySelector('textarea');
+
   if (favBox) {
     favBox.value = fav_ids;
     favBox.dispatchEvent(new Event('input', { bubbles: true }));
