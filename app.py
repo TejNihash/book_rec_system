@@ -286,10 +286,17 @@ with gr.Blocks(css="""
             popular_container = gr.HTML()
             popular_load_btn = gr.Button("📖 Load More Popular Books", elem_classes="load-more-btn")
 
+            
+
         # ---------- RECOMMENDATIONS SECTION ----------
         gr.Markdown("💫 Recommended For You", elem_classes="section-header")
         recs_state = gr.State(pd.DataFrame())
         recs_page_state = gr.State(0)
+        # Add this state variable with your other states
+        favorite_ids_state = gr.State([])
+        
+        # Add this hidden textbox in your UI (after search section)
+        favorite_ids_input = gr.Textbox(visible=False, elem_id="favorite-ids-input")
 
         with gr.Column(elem_classes="scroll-section"):
             recs_container = gr.HTML("<div class='no-books'>Add some favorites to get recommendations!</div>")
@@ -352,6 +359,43 @@ with gr.Blocks(css="""
                 
                 has_more = end < len(random_loaded_state)
                 return html, combined, random_page_state + 1, gr.update(visible=has_more), search_page_state
+
+
+
+
+        # Add this function to handle the hidden input
+        def handle_favorite_ids_change(favorite_ids_json):
+            """Convert JSON string from JS to Python list and store in state"""
+            try:
+                if favorite_ids_json:
+                    favorite_ids = json.loads(favorite_ids_json)
+                    favorite_ids_state.value = favorite_ids
+                else:
+                    favorite_ids = []
+                return favorite_ids
+            except:
+                return []
+
+        # Add this function for the refresh button
+        def refresh_recommendations_with_favorites():
+            """Use the stored favorite IDs to generate recommendations"""
+            favorite_ids = favorite_ids_state.value if hasattr(favorite_ids_state, 'value') else []
+            
+            if not favorite_ids:
+                return gr.update(value="<div class='no-books'>Add some favorites first!</div>"), pd.DataFrame(), 0, gr.update(visible=False)
+            
+            # Generate recommendations
+            recommendations = get_recommendations(favorite_ids)
+            
+            if recommendations.empty:
+                return gr.update(value="<div class='no-books'>No recommendations found for your favorites.</div>"), pd.DataFrame(), 0, gr.update(visible=False)
+            
+            # Load first batch
+            first_batch = recommendations.head(BOOKS_PER_LOAD)
+            html = build_books_grid_html(first_batch)
+            
+            has_more = len(recommendations) > BOOKS_PER_LOAD
+            return html, recommendations, 1, gr.update(visible=has_more)
 
         # ---------- EVENT HANDLERS ----------
         random_load_btn.click(
