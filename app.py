@@ -64,7 +64,7 @@ def refresh_recommendations(fav_ids):
 
 # ---------- Gradio UI ----------
 with gr.Blocks(css="""
-="""
+
 /* ---------- App Layout ---------- */
 .app-container { display:flex; height:100vh; overflow:hidden; font-family:'Inter','Segoe UI',sans-serif; background:#0e0e10; color:#eaeaea; }
 .main-content { flex-grow:1; overflow-y:auto; padding:16px; max-width:calc(100% - 320px); }
