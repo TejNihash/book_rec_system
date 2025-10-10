@@ -41,18 +41,25 @@ BOOKS_PER_REC = 100
     )
     return recs'''
 
-def refresh_recommendations(fav_ids):
-    # fav_ids is a list of strings now (from parse_fav_ids_string)
-    print("Received favorites:", fav_ids)   # <<-- very important debug line
-    if not fav_ids:
+# Python function to refresh recs
+def refresh_recommendations_from_state(fav_ids_list):
+    print("Received favorites:", fav_ids_list)
+    if not fav_ids_list:
         html = "<div class='no-books'>Add some favorites to see recommendations!</div>"
         return html, pd.DataFrame(), pd.DataFrame(), 0, gr.update(visible=False)
-
-    rec_df = get_similar_books(fav_ids, top_k=500)  # get a large candidate set
+    
+    rec_df = get_similar_books(fav_ids_list)
     first_batch = rec_df.head(BOOKS_PER_LOAD)
     html = build_books_grid_html(first_batch)
     has_more = len(rec_df) > BOOKS_PER_LOAD
     return html, rec_df, first_batch, 1, gr.update(visible=has_more)
+
+# Wire a button click to the State
+recs_refresh_btn.click(
+    refresh_recommendations_from_state,
+    inputs=[fav_ids_state],
+    outputs=[recs_container, recs_state, recs_display_state, recs_page_state, recs_load_btn]
+)
 
 # -------
 def create_book_card_html(book):
@@ -271,6 +278,7 @@ with gr.Blocks(css="""
         recs_display_state = gr.State(pd.DataFrame())  # subset currently shown
         recs_page_state = gr.State(0)
         fav_ids_state = gr.State([])
+        
 
 
 
@@ -377,7 +385,8 @@ with gr.Blocks(css="""
                 # Optionally refresh recommendations automatically:
                 html, rec_df, first_batch, page, load_btn = refresh_recommendations(fav_ids)
                 return html, rec_df, first_batch, page, load_btn
-            
+
+
 
             def update_recommendations(fav_ids):
                 
@@ -540,22 +549,17 @@ function updateFavoritesSidebar(){
 // ------sync fav ids with python for recs------
 async function syncFavoritesToPython() {
   const fav_ids = Array.from(favorites.keys());
-  console.log("🔥 Syncing favorites to Python:", fav_ids);
+  console.log("Syncing favorites to Python:", fav_ids);
 
-  // Wait until Gradio client is ready
-  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-  while (!window.gradio_client) await sleep(100);
-
-  try {
-    // Update state directly
-    await window.gradio_client.setValue("fav_ids_state", fav_ids);
-    // Trigger backend refresh
-    await window.gradio_client.click("sync_favs_btn");
-    console.log("✅ Synced favorites successfully!");
-  } catch (err) {
-    console.error("⚠️ Failed to sync favorites:", err);
+  // Find the State component in Gradio
+  const stateComponent = document.querySelector('gr-state[label="fav_ids_state"]');
+  if (stateComponent && stateComponent.setValue) {
+    stateComponent.setValue(fav_ids); // updates the backend state
+  } else {
+    console.warn("⚠️ Cannot find gr.State component for fav_ids_state");
   }
 }
+
 
 
 
