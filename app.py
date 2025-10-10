@@ -248,7 +248,7 @@ with gr.Blocks(css="""
         gr.Markdown("💡 Recommended For You", elem_classes="section-header")
         with gr.Column(elem_classes="scroll-section"):
             recs_container = gr.HTML()
-            recs_load_btn = gr.Button("🔁 Refresh Recommendations", elem_classes="load-more-btn", visible=False)
+            recs_load_btn = gr.Button("🔁 Refresh Recommendations", elem_classes="load-more-btn")
 
 
 
