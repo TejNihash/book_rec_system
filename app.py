@@ -216,7 +216,29 @@ def initial_load(loaded_books):
 with gr.Blocks(css="""
 /* ---------- App Layout ---------- */
 .app-container { display:flex; height:100vh; overflow:hidden; font-family:'Inter','Segoe UI',sans-serif; background:#0e0e10; color:#eaeaea; }
-.main-content { flex-grow:1; overflow-y:auto; padding:16px; max-width:calc(100% - 320px); }
+.main-content { 
+    flex-grow:1; 
+    overflow-y:auto; 
+    padding:16px; 
+    max-width:calc(100% - 320px); 
+}
+
+/* Mobile sidebar becomes full screen */
+@media (max-width: 768px) {
+    .app-container {
+        flex-direction: column;
+    }
+    .main-content {
+        max-width: 100%;
+        padding: 12px;
+    }
+    .sidebar {
+        position: relative;
+        width: 100%;
+        height: auto;
+        max-height: 300px;
+    }
+}
 .sidebar { width:300px; background:#141416; border-left:1px solid #2a2a2a; padding:16px; box-sizing:border-box; overflow-y:auto; position:fixed; right:0; top:0; bottom:0; color:#f0f0f0; }
 
 /* ---------- Fixed Scroll Sections ---------- */
@@ -224,7 +246,41 @@ with gr.Blocks(css="""
 .section-header { font-size:20px; font-weight:bold; margin-bottom:12px; color:#fff; border-bottom:2px solid #667eea; padding-bottom:6px; display:flex; justify-content:space-between; align-items:center; }
 
 /* ---------- Books Grid ---------- */
-.books-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 16px; }
+.books-grid { 
+    display: grid; 
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); 
+    gap: 12px; 
+}
+
+/* Responsive columns */
+@media (min-width: 1200px) {
+    .books-grid {
+        grid-template-columns: repeat(6, 1fr);
+    }
+}
+
+@media (max-width: 1199px) and (min-width: 768px) {
+    .books-grid {
+        grid-template-columns: repeat(4, 1fr);
+    }
+}
+
+@media (max-width: 767px) {
+    .books-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+    }
+}
+
+/* Adjust card padding for mobile */
+@media (max-width: 767px) {
+    .book-card {
+        padding: 8px;
+    }
+    .book-card img {
+        height: 160px;
+    }
+}
 .book-card { background:#1b1b1e; border-radius:12px; padding:12px; box-shadow:0 0 10px rgba(255,255,255,0.05); cursor:pointer; text-align:center; transition:all 0.25s ease; position:relative; border:1px solid #2d2d2d; display:flex; flex-direction:column; height:100%; }
 .book-card:hover { transform:translateY(-4px); box-shadow:0 0 18px rgba(120,180,255,0.35); }
 .book-card img { width:100%; height:200px; object-fit:cover; border-radius:8px; margin-bottom:10px; flex-shrink:0; }
