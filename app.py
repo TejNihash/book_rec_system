@@ -49,42 +49,21 @@ def get_recommendations(favorite_ids):
     if not favorite_ids:
         return pd.DataFrame()
     
-    # Get favorite book embeddings
-    fav_embeddings = []
-    valid_fav_ids = []
-    
-    for fav_id in favorite_ids:
-        book_data = df[df['id'] == fav_id]
-        if not book_data.empty:
-            fav_embeddings.append(book_data.iloc[0]['embedding'])
-            valid_fav_ids.append(fav_id)
-    
+    # Get embeddings for favorites
+    fav_embeddings = [df.loc[df['id']==fid, 'embedding'].values[0] for fid in favorite_ids if fid in df['id'].values]
     if not fav_embeddings:
         return pd.DataFrame()
     
-    # Calculate average embedding of favorites
-    avg_fav_embedding = np.mean(fav_embeddings, axis=0).reshape(1, -1)
-    
-    # Calculate cosine similarity with all books
+    avg_embedding = np.mean(fav_embeddings, axis=0).reshape(1,-1)
     all_embeddings = np.array(df['embedding'].tolist())
-    similarities = cosine_similarity(avg_fav_embedding, all_embeddings)[0]
+    sims = cosine_similarity(avg_embedding, all_embeddings)[0]
     
-    # Create similarity scores dataframe
-    sim_df = pd.DataFrame({
-        'id': df['id'],
-        'similarity': similarities
-    })
-    
-    # Remove favorite books from recommendations
-    sim_df = sim_df[~sim_df['id'].isin(valid_fav_ids)]
-    
-    # Get top recommendations
+    sim_df = pd.DataFrame({'id': df['id'], 'similarity': sims})
+    sim_df = sim_df[~sim_df['id'].isin(favorite_ids)]
     top_recs = sim_df.nlargest(BOOKS_PER_REC, 'similarity')
     
-    # Merge with book data
-    recommendations = pd.merge(top_recs, df, on='id', how='left')
-    
-    return recommendations
+    return pd.merge(top_recs, df, on='id', how='left')
+
 
 def refresh_recommendations(favorite_ids):
     if not favorite_ids:
@@ -104,27 +83,29 @@ def refresh_recommendations(favorite_ids):
 
 def refresh_recs_button(favorite_ids):
     if not favorite_ids:
-        return gr.update(value="<div class='no-books'>Add some favorites to get recommendations!</div>"), pd.DataFrame(), 0, gr.update(visible=False)
+        html = "<div class='no-books'>Add some favorites to get recommendations!</div>"
+        return html, pd.DataFrame(), 0, gr.update(visible=False)
     
-    return refresh_recommendations(favorite_ids)
+    recs_df = get_recommendations(favorite_ids)
+    first_batch = recs_df.head(BOOKS_PER_LOAD)
+    html = build_books_grid_html(first_batch)
+    
+    has_more = len(recs_df) > BOOKS_PER_LOAD
+    return html, recs_df, 1, gr.update(visible=has_more)
+
 
 def load_more_recommendations(recs_state, recs_page_state):
     if recs_state is None or recs_state.empty:
-        return gr.update(), recs_page_state, gr.update(visible=False)
+        return build_books_grid_html(pd.DataFrame()), recs_page_state, gr.update(visible=False)
     
     start = recs_page_state * BOOKS_PER_LOAD
     end = start + BOOKS_PER_LOAD
-    new_books = recs_state.iloc[start:end]
-    
-    if new_books.empty:
-        return gr.update(), recs_page_state, gr.update(visible=False)
-    
-    # Get all books loaded so far
     all_loaded = recs_state.iloc[:end]
     html = build_books_grid_html(all_loaded)
     
     has_more = end < len(recs_state)
     return html, recs_page_state + 1, gr.update(visible=has_more)
+
 
 def handle_favorite_ids_change(favorite_ids_json):
     try:
@@ -414,18 +395,22 @@ with gr.Blocks(css="""
             [random_loaded_state],
             [search_input, random_container, clear_search_btn, search_results_state, search_page_state, random_load_btn]
         )
+        
 
+        # Refresh button triggers recommendations
+        refresh_recs_btn.click(
+            refresh_recs_button,
+            [favorite_ids_state],
+            [recs_container, recs_state, recs_page_state, recs_load_btn]
+        )
+        
+        # Load more button
         recs_load_btn.click(
             load_more_recommendations,
             [recs_state, recs_page_state],
             [recs_container, recs_page_state, recs_load_btn]
         )
 
-        refresh_recs_btn.click(
-            refresh_recs_button,
-            [favorite_ids_state],
-            [recs_container, recs_state, recs_page_state, recs_load_btn]
-        )
 
         # Handle favorite IDs changes from JavaScript
         favorite_ids_input.change(
