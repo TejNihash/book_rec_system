@@ -409,7 +409,8 @@ with gr.Blocks(css="""
 """) as demo:
 
     with gr.Column(elem_classes="main-content"):
-        gr.Markdown("# 📚 Dark Library Explorer")
+        gr.Markdown("# 📚 Library Explorer")
+        gr.Markdown("## Look around and get recommendations")
         
         # ---------- SEARCH SECTION ----------
         with gr.Column(elem_classes="search-section"):
