@@ -70,10 +70,14 @@ def get_recommendations(favorite_ids):
     avg_fav_embedding = np.mean(fav_embeddings, axis=0).reshape(1, -1)
     all_embeddings = np.array(df['embedding'].tolist())
     similarities = cosine_similarity(avg_fav_embedding, all_embeddings)[0]
+
+    alpha = 0.3 #weight for ratings
+
+    fin_sim_score = alpha*df['average_rating']+(1-alpha)*similarities
     
-    sim_df = pd.DataFrame({'id': df['id'], 'similarity': similarities})
+    sim_df = pd.DataFrame({'id': df['id'], 'sim_score': fin_sim_score})
     sim_df = sim_df[~sim_df['id'].isin(valid_fav_ids)]
-    top_recs = sim_df.nlargest(BOOKS_PER_REC, 'similarity')
+    top_recs = sim_df.nlargest(BOOKS_PER_REC, 'sim_score')
     recommendations = pd.merge(top_recs, df, on='id', how='left')
     
     return recommendations
