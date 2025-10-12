@@ -582,14 +582,14 @@ with gr.Blocks(css="""
 
         # ---------- SEMANTIC SEARCH SECTION ----------
         with gr.Column(elem_classes="search-section"):
-            gr.Markdown("### 🧭 Find Books by Description or Mood")
+            gr.Markdown("### 🧭 Describe and find.")
             with gr.Row(elem_classes="search-row"):
                 semantic_input = gr.Textbox(
-                    placeholder="e.g. 'slow-burn fantasy with strong female lead' or 'mystery set in space'",
+                    placeholder="e.g. 'slow-burn fantasy with strong male lead' or 'mystery set in future space'",
                     show_label=False,
                     elem_classes="search-input"
                 )
-                semantic_btn = gr.Button("✨ Find Similar Books", elem_classes="search-btn")
+                semantic_btn = gr.Button("✨ Find Books", elem_classes="search-btn")
             clear_semantic_btn = gr.Button("Clear", elem_classes="clear-search", visible=False)
 
     
