@@ -156,7 +156,6 @@ def clear_semantic(random_loaded_state):
     return gr.update(value=""), html, gr.update(visible=False), pd.DataFrame(), 0, gr.update(visible=has_more)
 
 
-
 # ---------- Search Functions ----------
 def search_books(query, search_results_state, search_page_state):
     if not query.strip():
@@ -215,7 +214,7 @@ def load_more(loaded_books, display_books, page_idx):
 
 def load_more_combined(random_loaded_state, random_display_state, random_page_state,
                        search_results_state, search_display_state, search_page_state,
-                       semantic_results_state=None, semantic_display_state=None, semantic_page_state=0):
+                       semantic_results_state, semantic_display_state, semantic_page_state):
     """
     Unified Load More function for semantic search, keyword search, and random books.
     Prioritizes semantic search > keyword search > random.
@@ -232,10 +231,12 @@ def load_more_combined(random_loaded_state, random_display_state, random_page_st
             semantic_display_state = pd.DataFrame()
 
         if new_books.empty:
+            # No more books to load
             html = build_books_grid_html(semantic_display_state)
             return html, random_display_state, random_page_state, gr.update(visible=False), \
                    search_display_state, search_page_state, semantic_display_state, semantic_page_state
 
+        # Add new books to existing display
         combined = pd.concat([semantic_display_state, new_books], ignore_index=True)
         html = build_books_grid_html(combined)
         has_more = end < len(semantic_results_state)
@@ -243,7 +244,7 @@ def load_more_combined(random_loaded_state, random_display_state, random_page_st
                search_display_state, search_page_state, combined, semantic_page_state + 1
 
     # ---------- KEYWORD SEARCH ----------
-    if search_results_state is not None and not search_results_state.empty:
+    elif search_results_state is not None and not search_results_state.empty:
         start = search_page_state * BOOKS_PER_LOAD
         end = start + BOOKS_PER_LOAD
         new_books = search_results_state.iloc[start:end]
@@ -263,25 +264,24 @@ def load_more_combined(random_loaded_state, random_display_state, random_page_st
                combined, search_page_state + 1, semantic_display_state, semantic_page_state
 
     # ---------- RANDOM BOOKS ----------
-    start = random_page_state * BOOKS_PER_LOAD
-    end = start + BOOKS_PER_LOAD
-    new_books = random_loaded_state.iloc[start:end]
+    else:
+        start = random_page_state * BOOKS_PER_LOAD
+        end = start + BOOKS_PER_LOAD
+        new_books = random_loaded_state.iloc[start:end]
 
-    if random_display_state is None or random_display_state.empty:
-        random_display_state = pd.DataFrame()
+        if random_display_state is None or random_display_state.empty:
+            random_display_state = pd.DataFrame()
 
-    if new_books.empty:
-        html = build_books_grid_html(random_display_state)
-        return html, random_display_state, random_page_state, gr.update(visible=False), \
+        if new_books.empty:
+            html = build_books_grid_html(random_display_state)
+            return html, random_display_state, random_page_state, gr.update(visible=False), \
+                   search_display_state, search_page_state, semantic_display_state, semantic_page_state
+
+        combined = pd.concat([random_display_state, new_books], ignore_index=True)
+        html = build_books_grid_html(combined)
+        has_more = end < len(random_loaded_state)
+        return html, combined, random_page_state + 1, gr.update(visible=has_more), \
                search_display_state, search_page_state, semantic_display_state, semantic_page_state
-
-    combined = pd.concat([random_display_state, new_books], ignore_index=True)
-    html = build_books_grid_html(combined)
-    has_more = end < len(random_loaded_state)
-    return html, combined, random_page_state + 1, gr.update(visible=has_more), \
-           search_display_state, search_page_state, semantic_display_state, semantic_page_state
-
-
 
 def initial_load(loaded_books):
     return load_more(loaded_books, pd.DataFrame(), 0)
@@ -654,7 +654,6 @@ with gr.Blocks(css="""
             ]
         )
 
-
         
         shuffle_btn.click(
             shuffle_random_books,
@@ -720,7 +719,6 @@ with gr.Blocks(css="""
             [random_loaded_state],
             [semantic_input, random_container, clear_semantic_btn, semantic_results_state, semantic_page_state, random_load_btn]
         )
-
 
         # ---------- INITIAL LOAD ----------
         demo.load(
