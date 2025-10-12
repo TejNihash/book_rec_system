@@ -183,7 +183,7 @@ def load_more_search(search_results_state, search_page_state):
     
     start = search_page_state * BOOKS_PER_LOAD
     end = start + BOOKS_PER_LOAD
-    new_books = search_results_state.iloc[start:end]
+    new_books = search_results_state.iloc[:end]
     
     if new_books.empty:
         return gr.update(), search_page_state, gr.update(visible=False)
@@ -203,7 +203,7 @@ def clear_search(random_loaded_state):
 def load_more(loaded_books, display_books, page_idx):
     start = page_idx * BOOKS_PER_LOAD
     end = start + BOOKS_PER_LOAD
-    new_books = loaded_books.iloc[start:end]
+    new_books = loaded_books.iloc[:end]
     if display_books is None or display_books.empty:
         display_books = pd.DataFrame()
     if new_books.empty:
@@ -227,7 +227,7 @@ def load_more_combined(random_loaded_state, random_display_state, random_page_st
     if semantic_results_state is not None and not semantic_results_state.empty:
         start = semantic_page_state * BOOKS_PER_LOAD
         end = start + BOOKS_PER_LOAD
-        new_books = semantic_results_state.iloc[start:end]
+        new_books = semantic_results_state.iloc[:end]
 
         # If no new books to load, return current state
         if new_books.empty:
@@ -250,7 +250,7 @@ def load_more_combined(random_loaded_state, random_display_state, random_page_st
     elif search_results_state is not None and not search_results_state.empty:
         start = search_page_state * BOOKS_PER_LOAD
         end = start + BOOKS_PER_LOAD
-        new_books = search_results_state.iloc[start:end]
+        new_books = search_results_state.iloc[:end]
 
         if new_books.empty:
             html = build_books_grid_html(search_display_state)
@@ -272,7 +272,7 @@ def load_more_combined(random_loaded_state, random_display_state, random_page_st
     else:
         start = random_page_state * BOOKS_PER_LOAD
         end = start + BOOKS_PER_LOAD
-        new_books = random_loaded_state.iloc[start:end]
+        new_books = random_loaded_state.iloc[:end]
 
         if new_books.empty:
             html = build_books_grid_html(random_display_state)
