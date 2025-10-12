@@ -137,7 +137,7 @@ def semantic_search_books(user_query, semantic_results_state, semantic_page_stat
     all_embeddings = np.array(df['embedding'].tolist())
     similarities = cosine_similarity(query_emb, all_embeddings)[0]
     alpha = 0.3
-    similarities = alpha*df['average_ratings'] + (1-alpha)*similarities
+    similarities = alpha*df['average_rating'] + (1-alpha)*similarities
 
     sim_df = pd.DataFrame({'id': df['id'], 'sim_score': similarities})
     top_recs = sim_df.nlargest(BOOKS_PER_REC, 'sim_score')
@@ -565,9 +565,7 @@ with gr.Blocks(css="""
         # ---------- SEARCH SECTION ----------
         with gr.Column(elem_classes="search-section"):
             with gr.Row():
-                gr.Markdown("### 🔍 Search Books")
-                shuffle_btn = gr.Button("🔀 Shuffle", elem_classes="shuffle-btn", size="sm")
-            
+                gr.Markdown("### 🔍 Search Books")            
             with gr.Row(elem_classes="search-row"):
                 search_input = gr.Textbox(
                     placeholder="Search by title, author, or genre...",
@@ -587,7 +585,8 @@ with gr.Blocks(css="""
                 semantic_input = gr.Textbox(
                     placeholder="e.g. 'slow-burn fantasy with strong male lead' or 'mystery set in future space'",
                     show_label=False,
-                    elem_classes="search-input"
+                    elem_classes="search-input",
+                    scale = 8
                 )
                 semantic_btn = gr.Button("✨ Find Books", elem_classes="search-btn")
             clear_semantic_btn = gr.Button("Clear", elem_classes="clear-search", visible=False)
