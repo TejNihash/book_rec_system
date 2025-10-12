@@ -610,6 +610,8 @@ with gr.Blocks(css="""
 
             semantic_results_state = gr.State(pd.DataFrame())
             semantic_page_state = gr.State(0)
+            semantic_display_state = gr.State(pd.DataFrame())
+
 
             
             with gr.Column(elem_classes="scroll-section"):
