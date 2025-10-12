@@ -52,7 +52,8 @@ def shuffle_random_books():
     first_batch = random_books.head(BOOKS_PER_LOAD)
     html = build_books_grid_html(first_batch)
     has_more = len(random_books) > BOOKS_PER_LOAD
-    return random_books, html, pd.DataFrame(), 1, gr.update(visible=has_more)
+    # FIX: Return first_batch as display_state
+    return random_books, html, first_batch, 1, gr.update(visible=has_more)
 
 # ---------- Recommendation System ----------
 def get_recommendations(favorite_ids):
@@ -130,7 +131,7 @@ def load_more_recommendations(recs_state, recs_page_state):
 
 def semantic_search_books(user_query, semantic_results_state, semantic_page_state):
     if not user_query.strip():
-        return gr.update(), gr.update(visible=False), pd.DataFrame(), pd.DataFrame(), 0, gr.update(visible=False)  # Added empty display state
+        return gr.update(), gr.update(visible=False), pd.DataFrame(), pd.DataFrame(), 0, gr.update(visible=False)
 
     user_query = user_query.strip()
     query_emb = model.encode([user_query])
@@ -147,8 +148,8 @@ def semantic_search_books(user_query, semantic_results_state, semantic_page_stat
     html = build_books_grid_html(first_batch)
     has_more = len(recommendations) > BOOKS_PER_LOAD
 
-    # Return empty display state to start fresh
-    return html, gr.update(visible=True), recommendations, pd.DataFrame(), 1, gr.update(visible=has_more)
+    # FIX: Return the first batch as display_state, not empty DataFrame
+    return html, gr.update(visible=True), recommendations, first_batch, 1, gr.update(visible=has_more)
     
 def clear_semantic(random_loaded_state):
     first_batch = random_loaded_state.head(BOOKS_PER_LOAD)
@@ -160,7 +161,7 @@ def clear_semantic(random_loaded_state):
 # ---------- Search Functions ----------
 def search_books(query, search_results_state, search_page_state):
     if not query.strip():
-        return gr.update(), gr.update(visible=False), pd.DataFrame(), pd.DataFrame(), 0, gr.update(visible=False)  # Added empty display state
+        return gr.update(), gr.update(visible=False), pd.DataFrame(), pd.DataFrame(), 0, gr.update(visible=False)
     
     query = query.lower().strip()
     title_mask = df['title'].str.lower().str.contains(query, na=False)
@@ -174,8 +175,8 @@ def search_books(query, search_results_state, search_page_state):
     html = build_books_grid_html(first_batch)
     has_more = len(results) > BOOKS_PER_LOAD
     
-    # Return empty display state to start fresh
-    return html, gr.update(visible=True), results, pd.DataFrame(), 1, gr.update(visible=has_more)
+    # FIX: Return the first batch as display_state, not empty DataFrame
+    return html, gr.update(visible=True), results, first_batch, 1, gr.update(visible=has_more)
 
 def load_more_search(search_results_state, search_page_state):
     if search_results_state is None or search_results_state.empty:
@@ -183,12 +184,12 @@ def load_more_search(search_results_state, search_page_state):
     
     start = search_page_state * BOOKS_PER_LOAD
     end = start + BOOKS_PER_LOAD
-    new_books = search_results_state.iloc[:end]
+    new_books = search_results_state.iloc[start:end]
     
     if new_books.empty:
         return gr.update(), search_page_state, gr.update(visible=False)
     
-    all_loaded = search_results_state.iloc[:end]
+    all_loaded = search_results_state.iloc[start:end]
     html = build_books_grid_html(all_loaded)
     has_more = end < len(search_results_state)
     return html, search_page_state + 1, gr.update(visible=has_more)
@@ -203,7 +204,7 @@ def clear_search(random_loaded_state):
 def load_more(loaded_books, display_books, page_idx):
     start = page_idx * BOOKS_PER_LOAD
     end = start + BOOKS_PER_LOAD
-    new_books = loaded_books.iloc[:end]
+    new_books = loaded_books.iloc[start:end]
     if display_books is None or display_books.empty:
         display_books = pd.DataFrame()
     if new_books.empty:
@@ -227,7 +228,7 @@ def load_more_combined(random_loaded_state, random_display_state, random_page_st
     if semantic_results_state is not None and not semantic_results_state.empty:
         start = semantic_page_state * BOOKS_PER_LOAD
         end = start + BOOKS_PER_LOAD
-        new_books = semantic_results_state.iloc[:end]
+        new_books = semantic_results_state.iloc[start:end]
 
         # If no new books to load, return current state
         if new_books.empty:
@@ -250,7 +251,7 @@ def load_more_combined(random_loaded_state, random_display_state, random_page_st
     elif search_results_state is not None and not search_results_state.empty:
         start = search_page_state * BOOKS_PER_LOAD
         end = start + BOOKS_PER_LOAD
-        new_books = search_results_state.iloc[:end]
+        new_books = search_results_state.iloc[start:end]
 
         if new_books.empty:
             html = build_books_grid_html(search_display_state)
@@ -272,7 +273,7 @@ def load_more_combined(random_loaded_state, random_display_state, random_page_st
     else:
         start = random_page_state * BOOKS_PER_LOAD
         end = start + BOOKS_PER_LOAD
-        new_books = random_loaded_state.iloc[:end]
+        new_books = random_loaded_state.iloc[start:end]
 
         if new_books.empty:
             html = build_books_grid_html(random_display_state)
