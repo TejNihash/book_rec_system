@@ -467,13 +467,93 @@ with gr.Blocks(css="""
 .scroll-section::-webkit-scrollbar-thumb:hover, .sidebar::-webkit-scrollbar-thumb:hover { background:#555; }
 
 /* ---------- Search Section ---------- */
-.search-section { background:#1b1b1e; border-radius:8px; padding:16px; margin-bottom:20px; border:1px solid #2d2d2d; }
-.search-row { display:flex; gap:10px; align-items:end; }
-.search-input { flex:1; }
-.search-btn { background:#667eea; color:white; border:none; border-radius:6px; padding:12px 24px; cursor:pointer; font-weight:bold; }
-.search-btn:hover { background:#5a6fd8; }
-.clear-search { background:#555; color:white; border:none; border-radius:6px; padding:8px 16px; cursor:pointer; margin-top:8px; }
-.clear-search:hover { background:#666; }
+/* ---------- Search Section ---------- */
+.search-section { 
+    background: #1b1b1e; 
+    border-radius: 8px; 
+    padding: 16px; 
+    margin-bottom: 20px; 
+    border: 1px solid #2d2d2d; 
+}
+
+.search-row { 
+    display: flex; 
+    gap: 8px; 
+    align-items: center; 
+    width: 100%;
+}
+
+.search-input { 
+    flex: 1;
+    min-width: 0; /* Important for flex shrinking */
+}
+
+.search-btn { 
+    background: #667eea; 
+    color: white; 
+    border: none; 
+    border-radius: 6px; 
+    padding: 8px 16px !important; 
+    cursor: pointer; 
+    font-weight: bold;
+    font-size: 12px;
+    height: fit-content;
+    white-space: nowrap;
+}
+
+.search-btn:hover { 
+    background: #5a6fd8; 
+}
+
+/* Smaller shuffle button */
+.shuffle-btn { 
+    background: #8e44ad; 
+    padding: 6px 12px !important; 
+    border: none; 
+    border-radius: 6px; 
+    cursor: pointer; 
+    color: white; 
+    font-weight: bold; 
+    font-size: 11px; 
+    height: fit-content;
+    white-space: nowrap;
+}
+
+.shuffle-btn:hover { 
+    background: #9b59b6; 
+}
+
+.clear-search { 
+    background: #555; 
+    color: white; 
+    border: none; 
+    border-radius: 6px; 
+    padding: 8px 16px; 
+    cursor: pointer; 
+    margin-top: 8px; 
+}
+
+.clear-search:hover { 
+    background: #666; 
+}
+
+/* Mobile adjustments for search */
+@media (max-width: 768px) {
+    .search-row {
+        flex-direction: row; /* Keep row layout on mobile */
+        gap: 6px;
+    }
+    
+    .search-btn {
+        padding: 10px 14px !important;
+        font-size: 11px;
+    }
+    
+    .shuffle-btn {
+        padding: 6px 10px !important;
+        font-size: 10px;
+    }
+}
 
 .no-books { text-align:center; color:#9ba1b0; font-style:italic; padding:40px; font-size:16px; }
 """) as demo:
@@ -484,16 +564,20 @@ with gr.Blocks(css="""
         
         # ---------- SEARCH SECTION ----------
         with gr.Column(elem_classes="search-section"):
-            gr.Markdown("### 🔍 Search Books")
+            with gr.Row():
+                gr.Markdown("### 🔍 Search Books")
+                shuffle_btn = gr.Button("🔀 Shuffle", elem_classes="shuffle-btn", size="sm")
+            
             with gr.Row(elem_classes="search-row"):
                 search_input = gr.Textbox(
                     placeholder="Search by title, author, or genre...",
                     show_label=False,
-                    elem_classes="search-input"
+                    elem_classes="search-input",
+                    scale=8  # Takes more space
                 )
-                search_btn = gr.Button("Search", elem_classes="search-btn")
+                search_btn = gr.Button("Search", elem_classes="search-btn", size="sm", scale=2)  # Takes less space
+            
             clear_search_btn = gr.Button("Clear Search", elem_classes="clear-search", visible=False)
-
 
 
         # ---------- SEMANTIC SEARCH SECTION ----------
@@ -518,7 +602,10 @@ with gr.Blocks(css="""
             random_loaded_state = gr.State(df.sample(frac=1).reset_index(drop=True))
             random_display_state = gr.State(pd.DataFrame())
             random_page_state = gr.State(0)
+            
             search_results_state = gr.State(pd.DataFrame())
+            search_display_state = gr.State(pd.DataFrame())
+
             search_page_state = gr.State(0)
 
             semantic_results_state = gr.State(pd.DataFrame())
