@@ -298,19 +298,21 @@ def initial_load(loaded_books):
 with gr.Blocks(css="""
 
 /* ---------- App Layout ---------- */
-.gradio-container {
-    background: none !important;
-}
 
-.app-container {
-    display: flex;
-    height: 100vh;
-    overflow: hidden;
-    font-family: 'Inter','Segoe UI',sans-serif;
-    color: #eaeaea;
-    /* Replace with this background approach: */
-    background: linear-gradient(rgba(14, 14, 16, 0.7), rgba(14, 14, 16, 0.7)), 
-                url('https://i.pinimg.com/736x/50/fe/72/50fe7231c2cae13b1a4022639d17c4b9.jpg') center/cover no-repeat fixed;
+
+.app-container { 
+    display:flex; 
+    height:100vh; 
+    overflow:hidden; 
+    font-family:'Inter','Segoe UI',sans-serif; 
+    background:#0e0e10; 
+    color:#eaeaea; 
+    /* Add these background properties: */
+    background-image: url('https://i.pinimg.com/736x/50/fe/72/50fe7231c2cae13b1a4022639d17c4b9.jpg');
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+    background-repeat: no-repeat;
 }
 
 
