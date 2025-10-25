@@ -298,18 +298,24 @@ def initial_load(loaded_books):
 with gr.Blocks(css="""
 
 /* ---------- App Layout ---------- */
-.app-container { 
-    display:flex; 
-    height:100vh; 
-    overflow:hidden; 
-    font-family:'Inter','Segoe UI',sans-serif; 
-    color:#eaeaea;
-    position: relative;  /* <-- important */
-    z-index: 0;          /* <-- important */
-    background-image: url('https://images.unsplash.com/photo-1752052081785-d2635a8e30b5?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&q=80&w=1200');
+/* Remove Gradio's default background so your image shows */
+.gradio-container {
+    background: none !important;
+}
+
+/* App background + positioning */
+.app-container {
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+    font-family: 'Inter','Segoe UI',sans-serif;
+    color: #eaeaea;
+    position: relative;
+    z-index: 0;
+    background-image: url('https://images.unsplash.com/photo-1752052081785-d2635a8e30b5?ixlib=rb-4.1.0&ixid=...&auto=format&fit=crop&q=80&w=1200');
     background-size: cover;
     background-position: center;
-    background-attachment: fixed;
+    /* background-attachment: fixed;  <-- optional; doesn't behave on some mobile browsers */
     background-repeat: no-repeat;
 }
 
@@ -320,16 +326,17 @@ with gr.Blocks(css="""
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(14, 14, 16, 0.7); /* Dark overlay */
+    background: rgba(14, 14, 16, 0.7); /* dark overlay */
     z-index: -1; /* sits behind content but above bg */
 }
 
-.main-content { 
-    flex-grow:1; 
-    overflow-y:auto; 
-    padding:16px; 
-    max-width:calc(100% - 320px); 
+.main-content {
+    flex-grow: 1;
+    overflow-y: auto;
+    padding: 16px;
+    max-width: calc(100% - 320px);
 }
+
 
 /* Mobile sidebar becomes truly collapsible */
 @media (max-width: 768px) {
