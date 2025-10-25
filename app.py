@@ -298,40 +298,22 @@ def initial_load(loaded_books):
 with gr.Blocks(css="""
 
 /* ---------- App Layout ---------- */
-/* Remove Gradio's default background so your image shows */
 .gradio-container {
     background: none !important;
 }
 
-/* App background + positioning */
 .app-container {
     display: flex;
     height: 100vh;
     overflow: hidden;
     font-family: 'Inter','Segoe UI',sans-serif;
     color: #eaeaea;
-    position: relative;
-    z-index: 0;
-
-    background-image: url('https://i.pinimg.com/736x/50/fe/72/50fe7231c2cae13b1a4022639d17c4b9.jpg');
-    background-size: cover;
-    background-position: center;
-    background-repeat: no-repeat;
-    position: relative;  /* add this if not already there */
-    z-index: 0;          /* add this if not already there */
+    /* Replace with this background approach: */
+    background: linear-gradient(rgba(14, 14, 16, 0.7), rgba(14, 14, 16, 0.7)), 
+                url('https://i.pinimg.com/736x/50/fe/72/50fe7231c2cae13b1a4022639d17c4b9.jpg') center/cover no-repeat fixed;
 }
 
 
-.app-container::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(14, 14, 16, 0.7);
-    z-index: -1;
-}
 .main-content {
     flex-grow: 1;
     overflow-y: auto;
