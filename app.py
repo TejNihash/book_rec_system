@@ -298,6 +298,16 @@ def initial_load(loaded_books):
 with gr.Blocks(css="""
 
 /* ---------- App Layout ---------- */
+/* Apply background to the full app container */
+.gradio-container {
+    background: #0e0e10 url('https://i.pinimg.com/736x/50/fe/72/50fe7231c2cae13b1a4022639d17c4b9.jpg') no-repeat center center fixed;
+    background-size: cover;
+    height: 100vh;
+    width: 100vw;
+    overflow: hidden;
+    color: #eaeaea;
+    font-family: 'Inter','Segoe UI',sans-serif;
+}
 
 
 .app-container { 
