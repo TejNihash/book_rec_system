@@ -302,36 +302,28 @@ with gr.Blocks(css="""
 .gradio-container {
     background: #0e0e10 url('https://i.pinimg.com/736x/50/fe/72/50fe7231c2cae13b1a4022639d17c4b9.jpg') no-repeat center center fixed;
     background-size: cover;
-    height: 100vh;
+    min-height: 100vh;  /* Changed from height to min-height */
     width: 100vw;
-    overflow: hidden;
+    overflow: auto;     /* Changed from hidden to auto */
     color: #eaeaea;
     font-family: 'Inter','Segoe UI',sans-serif;
 }
 
-
 .app-container { 
     display:flex; 
-    height:100vh; 
-    overflow:hidden; 
+    min-height: 100vh;  /* Changed from height to min-height */
+    overflow: visible;  /* Changed from hidden to visible */
     font-family:'Inter','Segoe UI',sans-serif; 
-    background: #0e0e10 url('https://i.pinimg.com/736x/50/fe/72/50fe7231c2cae13b1a4022639d17c4b9.jpg') no-repeat center center fixed;
+    background: transparent;  /* Remove duplicate background */
     color:#eaeaea; 
-    /* Add these background properties: */
-    background-size: cover;
-    background-position: center;
-    background-attachment: fixed;
-    background-repeat: no-repeat;
 }
-
 
 .main-content {
     flex-grow: 1;
-    overflow-y: auto;
+    overflow-y: auto;   /* This should work now */
     padding: 16px;
     max-width: calc(100% - 320px);
 }
-
 
 /* Mobile sidebar becomes truly collapsible */
 @media (max-width: 768px) {
