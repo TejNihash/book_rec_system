@@ -312,24 +312,26 @@ with gr.Blocks(css="""
     color: #eaeaea;
     position: relative;
     z-index: 0;
-    background-image: url('https://images.unsplash.com/photo-1752052081785-d2635a8e30b5?ixlib=rb-4.1.0&ixid=...&auto=format&fit=crop&q=80&w=1200');
+
+    background-image: url('https://i.pinimg.com/736x/50/fe/72/50fe7231c2cae13b1a4022639d17c4b9.jpg');
     background-size: cover;
     background-position: center;
-    /* background-attachment: fixed;  <-- optional; doesn't behave on some mobile browsers */
     background-repeat: no-repeat;
+    position: relative;  /* add this if not already there */
+    z-index: 0;          /* add this if not already there */
 }
+
 
 .app-container::before {
     content: '';
-    position: absolute; /* not fixed */
+    position: absolute;
     top: 0;
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(14, 14, 16, 0.7); /* dark overlay */
-    z-index: -1; /* sits behind content but above bg */
+    background: rgba(14, 14, 16, 0.7);
+    z-index: -1;
 }
-
 .main-content {
     flex-grow: 1;
     overflow-y: auto;
