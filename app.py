@@ -312,10 +312,30 @@ with gr.Blocks(css="""
         height: auto;
         min-height: 100vh;
     }
+
+    .app-container::before {
+        content: '';
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(14, 14, 16, 0.7); /* Dark semi-transparent overlay */
+        z-index: -1;
+    }
+    
     .main-content {
         max-width: 100%;
         padding: 12px;
         order: 1;
+
+
+    background-image: url('https://images.unsplash.com/photo-1752052081785-d2635a8e30b5?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&q=80&w=687');
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+    background-repeat: no-repeat;
+
     }
     .sidebar {
         position: relative;
