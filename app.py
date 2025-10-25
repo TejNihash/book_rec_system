@@ -297,18 +297,21 @@ def initial_load(loaded_books):
 # ---------- Gradio UI ----------
 with gr.Blocks(css="""
 /* ---------- App Layout ---------- */
-.app-container { display:flex; height:100vh; overflow:hidden; font-family:'Inter','Segoe UI',sans-serif; background:#0e0e10; color:#eaeaea; }
+.app-container { display:flex; height:100vh; overflow:hidden; font-family:'Inter','Segoe UI',sans-serif; background:#0e0e10; color:#eaeaea;
+    background-image: url('https://images.unsplash.com/photo-1752052081785-d2635a8e30b5?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&q=80&w=687');
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+    background-repeat: no-repeat;
+    
+}
 .main-content { 
     flex-grow:1; 
     overflow-y:auto; 
     padding:16px; 
     max-width:calc(100% - 320px); 
 
-    background-image: url('https://images.unsplash.com/photo-1752052081785-d2635a8e30b5?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&q=80&w=687');
-    background-size: cover;
-    background-position: center;
-    background-attachment: fixed;
-    background-repeat: no-repeat;
+
 }
 .app-container::before {
     content: '';
