@@ -305,10 +305,9 @@ with gr.Blocks(css="""
     height:100vh; 
     overflow:hidden; 
     font-family:'Inter','Segoe UI',sans-serif; 
-    background:#0e0e10; 
+    background: #0e0e10 url('https://i.pinimg.com/736x/50/fe/72/50fe7231c2cae13b1a4022639d17c4b9.jpg') no-repeat center center fixed;
     color:#eaeaea; 
     /* Add these background properties: */
-    background-image: url('https://i.pinimg.com/736x/50/fe/72/50fe7231c2cae13b1a4022639d17c4b9.jpg');
     background-size: cover;
     background-position: center;
     background-attachment: fixed;
