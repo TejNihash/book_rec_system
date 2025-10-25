@@ -296,11 +296,6 @@ def initial_load(loaded_books):
 
 # ---------- Gradio UI ----------
 with gr.Blocks(css="""
-/* ---------- App Layout ---------- */
-/* Remove Gradio's default white background */
-.gradio-container {
-    background: none !important;
-}
 
 /* ---------- App Layout ---------- */
 .app-container { 
